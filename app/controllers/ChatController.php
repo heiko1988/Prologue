@@ -261,6 +261,12 @@ class ChatController extends Controller {
         $supportsLastSeen = $this->supportsLastSeenMessageId();
         $supportsChatTitle = $this->supportsChatTitle();
 
+        // Role-based access check
+        if (!Auth::canAccessChat($authUser, $chat)) {
+            $this->flash('error', 'invalid_chat');
+            $this->redirect('/');
+        }
+
         $userId = $currentUserId;
         $member = Database::query("SELECT * FROM chat_members WHERE chat_id = ? AND user_id = ?", [$chat->id, $userId])->fetch();
         if (!$member) {
@@ -387,6 +393,10 @@ class ChatController extends Controller {
         $pendingAttachments = Attachment::listPendingForChatUser((int)$chat->id, (int)$currentUserId);
         $pinnedMessage = $this->getPinnedMessageForChat((int)$chat->id);
 
+        $allRoles = Role::supportsRoles() ? Role::all() : [];
+        $chatRequiredRole = Role::supportsRoles() ? Role::getChatRole((int)$chat->id) : null;
+        $tempAccessList = ($isCurrentUserAdmin && Role::supportsRoles()) ? Role::getTempAccessList((int)$chat->id) : [];
+
         $this->view('chat', [
             'chat' => $chat,
             'chatTitle' => $chatTitle,
@@ -400,6 +410,9 @@ class ChatController extends Controller {
             'messageRestrictionReason' => $messageRestrictionReason,
             'canStartCalls' => $canStartCalls,
             'pinnedMessage' => $pinnedMessage,
+            'allRoles' => $allRoles,
+            'chatRequiredRole' => $chatRequiredRole,
+            'tempAccessList' => $tempAccessList,
             'csrf' => $this->csrfToken()
         ]);
     }
@@ -794,6 +807,13 @@ class ChatController extends Controller {
         }
 
         $targetUserId = (int)$target->id;
+        // Check if target user has the required role for this chat
+        $requiredRoleId = (int)($chat->required_role_id ?? 0);
+        $isActorAdmin = strtolower((string)($authUser->role ?? '')) === 'admin';
+        if ($requiredRoleId > 0 && !$isActorAdmin && Role::supportsRoles() && !Role::userHasRole($targetUserId, $requiredRoleId)) {
+            $this->json(['error' => 'User does not have the required role for this chat'], 403);
+        }
+
         $existingTargetMember = Database::query(
             "SELECT id FROM chat_members WHERE chat_id = ? AND user_id = ? LIMIT 1",
             [$chatId, $targetUserId]

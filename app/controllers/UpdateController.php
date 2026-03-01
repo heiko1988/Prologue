@@ -16,6 +16,12 @@ class UpdateController extends Controller {
                 "ALTER TABLE attachments ADD COLUMN file_hash CHAR(64) NULL AFTER height, ADD COLUMN dedup_source_id BIGINT NULL AFTER file_hash, ADD KEY idx_attachments_hash (file_hash, file_extension)",
                 "ALTER TABLE attachments ADD CONSTRAINT fk_attachments_dedup_source FOREIGN KEY (dedup_source_id) REFERENCES attachments(id) ON DELETE SET NULL",
             ],
+            '0.1.0' => [
+                "CREATE TABLE IF NOT EXISTS roles (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(50) NOT NULL UNIQUE, color VARCHAR(7) NOT NULL DEFAULT '#6b7280', description VARCHAR(255) DEFAULT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+                "CREATE TABLE IF NOT EXISTS user_roles (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, role_id INT NOT NULL, assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY uq_user_role (user_id, role_id), FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+                "CREATE TABLE IF NOT EXISTS chat_temp_access (id INT AUTO_INCREMENT PRIMARY KEY, chat_id INT NOT NULL, user_id INT NOT NULL, granted_by INT DEFAULT NULL, expires_at DATETIME DEFAULT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY uq_chat_temp_access (chat_id, user_id), FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE CASCADE, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY (granted_by) REFERENCES users(id) ON DELETE SET NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+                "ALTER TABLE chats ADD COLUMN required_role_id INT DEFAULT NULL, ADD CONSTRAINT fk_chats_required_role FOREIGN KEY (required_role_id) REFERENCES roles(id) ON DELETE SET NULL",
+            ],
         ];
     }
 

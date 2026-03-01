@@ -477,6 +477,36 @@ class ApiController extends Controller {
             }
         }
 
+        // Filter chats by role access and attach role info
+        $authUser = Auth::user();
+        $rolesSupported = Role::supportsRoles();
+        $filteredChats = [];
+        foreach ($chats as $chat) {
+            if ($rolesSupported) {
+                // Fetch required_role_id for this chat
+                $chatRow = Database::query("SELECT required_role_id FROM chats WHERE id = ?", [(int)$chat->id])->fetch();
+                $chat->required_role_id = $chatRow ? (int)($chatRow->required_role_id ?? 0) : 0;
+
+                if ($chat->required_role_id > 0) {
+                    $fullChat = (object)['id' => $chat->id, 'type' => $chat->type, 'required_role_id' => $chat->required_role_id];
+                    if (!Auth::canAccessChat($authUser, $fullChat)) {
+                        continue;
+                    }
+                    $roleInfo = Role::find($chat->required_role_id);
+                    $chat->required_role_name = $roleInfo ? $roleInfo->name : null;
+                    $chat->required_role_color = $roleInfo ? $roleInfo->color : null;
+                } else {
+                    $chat->required_role_name = null;
+                    $chat->required_role_color = null;
+                }
+            } else {
+                $chat->required_role_name = null;
+                $chat->required_role_color = null;
+            }
+            $filteredChats[] = $chat;
+        }
+        $chats = $filteredChats;
+
         // Load admin-defined chat order from settings
         $privateOrderRaw = Database::query("SELECT `value` FROM settings WHERE `key` = 'chat_order_private'")->fetchColumn();
         $groupOrderRaw = Database::query("SELECT `value` FROM settings WHERE `key` = 'chat_order_group'")->fetchColumn();
@@ -496,6 +526,11 @@ class ApiController extends Controller {
 
         $allowed = Database::query("SELECT id FROM chat_members WHERE chat_id = ? AND user_id = ?", [$chatId, $userId])->fetch();
         if (!$allowed) {
+            $this->json(['error' => 'Access denied'], 403);
+        }
+
+        $chatForRoleCheck = Database::query("SELECT * FROM chats WHERE id = ?", [$chatId])->fetch();
+        if ($chatForRoleCheck && !Auth::canAccessChat(Auth::user(), $chatForRoleCheck)) {
             $this->json(['error' => 'Access denied'], 403);
         }
 

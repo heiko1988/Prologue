@@ -564,6 +564,7 @@
     window.CURRENT_USER_ID = <?= json_encode((int)($currentUser->id ?? 0)) ?>;
     window.CURRENT_USERNAME = <?= json_encode((string)($currentUser->username ?? '')) ?>;
     window.CURRENT_USER_ROLE = <?= json_encode((string)($currentUser->role ?? 'user')) ?>;
+    window.CURRENT_USER_ROLES = <?= json_encode(Role::supportsRoles() ? Role::getUserRoles((int)($currentUser->id ?? 0)) : []) ?>;
     window.CURRENT_USER_PRESENCE_STATUS = <?= json_encode(User::normalizePresenceStatus($currentUser->presence_status ?? null) ?? 'online') ?>;
     window.OPENMOJI_FILES = <?= json_encode($openMojiFileNames, JSON_UNESCAPED_SLASHES) ?>;
     window.OPENMOJI_METADATA = <?= json_encode($openMojiMetadata, JSON_UNESCAPED_SLASHES) ?>;

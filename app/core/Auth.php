@@ -173,6 +173,40 @@ class Auth {
         ]);
     }
 
+    public static function canAccessChat($user, $chat): bool {
+        if (!$user || !$chat) {
+            return false;
+        }
+
+        if (strtolower((string)($user->role ?? '')) === 'admin') {
+            return true;
+        }
+
+        if (!Chat::isGroupType($chat->type ?? null)) {
+            return true;
+        }
+
+        $requiredRoleId = (int)($chat->required_role_id ?? 0);
+        if ($requiredRoleId <= 0) {
+            return true;
+        }
+
+        $userId = (int)($user->id ?? 0);
+        if ($userId <= 0) {
+            return false;
+        }
+
+        if (Role::supportsRoles() && Role::userHasRole($userId, $requiredRoleId)) {
+            return true;
+        }
+
+        if (Role::supportsRoles() && Role::hasTempAccess((int)($chat->id ?? 0), $userId)) {
+            return true;
+        }
+
+        return false;
+    }
+
     private static function browserLabel($userAgent) {
         $ua = strtolower(trim((string)$userAgent));
         if ($ua === '') {

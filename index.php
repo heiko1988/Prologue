@@ -208,6 +208,20 @@ $router->post('/users/ban', 'AdminUserController@ban');
 $router->post('/users/delete', 'AdminUserController@delete');
 $router->get('/tree', 'TreeController@index');
 
+// Roles (admin)
+$router->post('/admin/roles/create', 'RoleController@create');
+$router->post('/admin/roles/update', 'RoleController@update');
+$router->post('/admin/roles/delete', 'RoleController@delete');
+$router->post('/admin/roles/assign', 'RoleController@assign');
+$router->post('/admin/roles/remove', 'RoleController@remove');
+$router->post('/admin/roles/chat/set', 'RoleController@setChatRole');
+$router->post('/admin/roles/chat/remove', 'RoleController@removeChatRole');
+$router->post('/admin/roles/temp-access/grant', 'RoleController@grantTempAccess');
+$router->post('/admin/roles/temp-access/revoke', 'RoleController@revokeTempAccess');
+$router->get('/api/roles', 'RoleController@list');
+$router->get('/api/roles/temp-access', 'RoleController@getTempAccess');
+$router->get('/api/roles/user', 'RoleController@getUserRoles');
+
 // Friends
 $router->post('/friends/request', 'FriendController@sendRequest');
 $router->post('/friends/accept', 'FriendController@acceptRequest');

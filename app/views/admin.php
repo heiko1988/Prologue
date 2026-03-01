@@ -617,4 +617,159 @@
         }
     }
     </style>
+
+    <!-- Roles Management Section -->
+    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 w-full">
+        <h2 class="text-xl font-semibold mb-4">Roles</h2>
+        <div id="roles-list" class="space-y-3 mb-4"></div>
+        <div class="border-t border-zinc-700 pt-4">
+            <h3 class="text-sm font-semibold text-zinc-400 uppercase tracking-wide mb-3">Create New Role</h3>
+            <div class="flex flex-wrap items-end gap-3">
+                <div>
+                    <label class="text-xs text-zinc-400 block mb-1">Name</label>
+                    <input type="text" id="role-create-name" maxlength="50" placeholder="e.g. Staff" class="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm w-40">
+                </div>
+                <div>
+                    <label class="text-xs text-zinc-400 block mb-1">Color</label>
+                    <input type="color" id="role-create-color" value="#6b7280" class="bg-zinc-800 border border-zinc-700 rounded-lg w-10 h-9 cursor-pointer">
+                </div>
+                <div>
+                    <label class="text-xs text-zinc-400 block mb-1">Description</label>
+                    <input type="text" id="role-create-description" maxlength="255" placeholder="Optional description" class="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm w-56">
+                </div>
+                <button type="button" onclick="createRole()" class="bg-emerald-700 hover:bg-emerald-600 text-white text-sm px-4 py-2 rounded-lg">Create</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Role Edit Modal -->
+    <div id="role-edit-modal" class="hidden fixed inset-0 bg-black/70 z-50 p-4 md:p-6" aria-hidden="true">
+        <div class="h-full w-full flex items-center justify-center">
+            <div class="w-full max-w-md bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-6" role="dialog">
+                <h2 class="text-lg font-semibold text-zinc-100 mb-4">Edit Role</h2>
+                <input type="hidden" id="role-edit-id">
+                <div class="space-y-3">
+                    <div>
+                        <label class="text-xs text-zinc-400 block mb-1">Name</label>
+                        <input type="text" id="role-edit-name" maxlength="50" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="text-xs text-zinc-400 block mb-1">Color</label>
+                        <input type="color" id="role-edit-color" class="bg-zinc-800 border border-zinc-700 rounded-lg w-10 h-9 cursor-pointer">
+                    </div>
+                    <div>
+                        <label class="text-xs text-zinc-400 block mb-1">Description</label>
+                        <input type="text" id="role-edit-description" maxlength="255" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm">
+                    </div>
+                </div>
+                <div class="mt-5 flex items-center justify-end gap-3">
+                    <button type="button" onclick="closeRoleEditModal()" class="px-4 py-2 rounded-xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-zinc-200">Cancel</button>
+                    <button type="button" onclick="saveRoleEdit()" class="px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    async function loadRoles() {
+        const res = await fetch('/api/roles');
+        const data = await res.json();
+        const list = document.getElementById('roles-list');
+        if (!data.roles || data.roles.length === 0) {
+            list.innerHTML = '<p class="text-zinc-400 text-sm">No roles created yet.</p>';
+            return;
+        }
+        list.innerHTML = data.roles.map(r => `
+            <div class="bg-zinc-800 rounded-xl p-3 flex items-center justify-between gap-3" data-role-id="${r.id}">
+                <div class="flex items-center gap-3 min-w-0">
+                    <span class="inline-block w-3 h-3 rounded-full shrink-0" style="background:${r.color}"></span>
+                    <div class="min-w-0">
+                        <div class="font-medium">${escapeHtml(r.name)}</div>
+                        ${r.description ? `<div class="text-xs text-zinc-400">${escapeHtml(r.description)}</div>` : ''}
+                    </div>
+                </div>
+                <div class="flex gap-2 shrink-0">
+                    <button onclick="openRoleEditModal(${r.id}, '${escapeHtml(r.name)}', '${r.color}', '${escapeHtml(r.description || '')}')" class="bg-zinc-700 hover:bg-zinc-600 text-sm px-3 py-1.5 rounded-lg">Edit</button>
+                    <button onclick="deleteRole(${r.id}, '${escapeHtml(r.name)}')" class="bg-red-700 hover:bg-red-600 text-red-100 text-sm px-3 py-1.5 rounded-lg">Delete</button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function escapeHtml(s) {
+        const d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    async function createRole() {
+        const name = document.getElementById('role-create-name').value.trim();
+        const color = document.getElementById('role-create-color').value;
+        const description = document.getElementById('role-create-description').value.trim();
+        if (!name) return alert('Role name is required');
+
+        const fd = new FormData();
+        fd.append('csrf_token', window.CSRF_TOKEN);
+        fd.append('name', name);
+        fd.append('color', color);
+        fd.append('description', description);
+
+        const res = await fetch('/admin/roles/create', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (data.error) return alert(data.error);
+
+        document.getElementById('role-create-name').value = '';
+        document.getElementById('role-create-description').value = '';
+        loadRoles();
+    }
+
+    function openRoleEditModal(id, name, color, description) {
+        document.getElementById('role-edit-id').value = id;
+        document.getElementById('role-edit-name').value = name;
+        document.getElementById('role-edit-color').value = color;
+        document.getElementById('role-edit-description').value = description;
+        document.getElementById('role-edit-modal').classList.remove('hidden');
+    }
+
+    function closeRoleEditModal() {
+        document.getElementById('role-edit-modal').classList.add('hidden');
+    }
+
+    async function saveRoleEdit() {
+        const id = document.getElementById('role-edit-id').value;
+        const name = document.getElementById('role-edit-name').value.trim();
+        const color = document.getElementById('role-edit-color').value;
+        const description = document.getElementById('role-edit-description').value.trim();
+        if (!name) return alert('Role name is required');
+
+        const fd = new FormData();
+        fd.append('csrf_token', window.CSRF_TOKEN);
+        fd.append('id', id);
+        fd.append('name', name);
+        fd.append('color', color);
+        fd.append('description', description);
+
+        const res = await fetch('/admin/roles/update', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (data.error) return alert(data.error);
+
+        closeRoleEditModal();
+        loadRoles();
+    }
+
+    async function deleteRole(id, name) {
+        if (!confirm(`Delete role "${name}"? Chats with this role will become accessible to all users.`)) return;
+
+        const fd = new FormData();
+        fd.append('csrf_token', window.CSRF_TOKEN);
+        fd.append('id', id);
+
+        const res = await fetch('/admin/roles/delete', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (data.error) return alert(data.error);
+        loadRoles();
+    }
+
+    document.addEventListener('DOMContentLoaded', loadRoles);
+    </script>
 </div>

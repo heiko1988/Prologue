@@ -174,6 +174,10 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                 <?php if ($canTakeGroupOwnership): ?>
                 <button type="button" data-chat-action="take-ownership" class="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-zinc-800">Take Ownership</button>
                 <?php endif; ?>
+                <?php if ($isCurrentUserAdmin && $isGroupChat): ?>
+                <button type="button" data-chat-action="set-role" class="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-zinc-800 text-indigo-300">Set Required Role</button>
+                <button type="button" data-chat-action="temp-access" class="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-zinc-800 text-amber-300">Temp Access</button>
+                <?php endif; ?>
                 <button type="button" data-chat-action="leave-group" class="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-zinc-800 text-red-300">Leave Group</button>
                 <?php if ($isGroupOwner): ?>
                 <button type="button" data-chat-action="delete-group" class="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-zinc-800 text-red-300">Delete Group</button>
@@ -191,6 +195,12 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
     </div>
     <?php if ($isGroupChat): ?>
     <?php $otherMembersCount = count(array_filter($members ?? [], fn($m) => (int)$m->id !== (int)$currentUserId)); ?>
+    <?php if (!empty($chatRequiredRole)): ?>
+    <div class="px-6 py-2 border-b border-zinc-800 flex items-center gap-2">
+        <span class="text-xs text-zinc-400">Required Role:</span>
+        <span class="text-[11px] px-2 py-0.5 rounded-full text-white" style="background:<?= htmlspecialchars($chatRequiredRole->color, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($chatRequiredRole->name, ENT_QUOTES, 'UTF-8') ?></span>
+    </div>
+    <?php endif; ?>
     <div class="px-6 py-3 border-b border-zinc-800 text-sm">
         <div class="text-xs uppercase tracking-wide text-zinc-400 mb-2">Users in Group</div>
         <div class="flex flex-wrap items-center gap-2">
@@ -664,3 +674,166 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
         <img id="attachment-lightbox-image" src="" alt="Attachment preview" class="max-h-full max-w-full rounded-xl border border-zinc-700">
     </div>
 </div>
+
+<?php if ($isCurrentUserAdmin && $isGroupChat): ?>
+<!-- Set Required Role Modal -->
+<div id="set-role-modal" class="hidden fixed inset-0 bg-black/70 z-50 p-4 md:p-6" aria-hidden="true">
+    <div class="h-full w-full flex items-center justify-center">
+        <div class="w-full max-w-md bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-6" role="dialog">
+            <h2 class="text-lg font-semibold text-zinc-100 mb-4">Set Required Role</h2>
+            <p class="text-sm text-zinc-400 mb-3">Only users with this role (and admins) can access this chat.</p>
+            <div id="set-role-options" class="space-y-2 max-h-64 overflow-y-auto"></div>
+            <div class="mt-5 flex items-center justify-end">
+                <button type="button" onclick="document.getElementById('set-role-modal').classList.add('hidden')" class="px-4 py-2 rounded-xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-zinc-200">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Temp Access Modal -->
+<div id="temp-access-modal" class="hidden fixed inset-0 bg-black/70 z-50 p-4 md:p-6" aria-hidden="true">
+    <div class="h-full w-full flex items-center justify-center">
+        <div class="w-full max-w-lg bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-6" role="dialog">
+            <h2 class="text-lg font-semibold text-zinc-100 mb-4">Temporary Access</h2>
+            <div class="border-b border-zinc-700 pb-4 mb-4">
+                <h3 class="text-sm font-semibold text-zinc-400 uppercase tracking-wide mb-3">Grant Access</h3>
+                <div class="flex flex-wrap items-end gap-3">
+                    <div class="flex-1 min-w-[160px]">
+                        <label class="text-xs text-zinc-400 block mb-1">Username</label>
+                        <input type="text" id="temp-access-username" placeholder="Username" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="text-xs text-zinc-400 block mb-1">Duration</label>
+                        <select id="temp-access-duration" class="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm">
+                            <option value="1h">1 Hour</option>
+                            <option value="24h">24 Hours</option>
+                            <option value="7d">7 Days</option>
+                            <option value="unlimited">Unlimited</option>
+                        </select>
+                    </div>
+                    <button type="button" onclick="grantTempAccess()" class="bg-emerald-700 hover:bg-emerald-600 text-white text-sm px-4 py-2 rounded-lg">Grant</button>
+                </div>
+            </div>
+            <div>
+                <h3 class="text-sm font-semibold text-zinc-400 uppercase tracking-wide mb-3">Active Temp Access</h3>
+                <div id="temp-access-list" class="space-y-2 max-h-48 overflow-y-auto"></div>
+            </div>
+            <div class="mt-5 flex items-center justify-end">
+                <button type="button" onclick="document.getElementById('temp-access-modal').classList.add('hidden')" class="px-4 py-2 rounded-xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-zinc-200">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function(){
+    const chatId = <?= (int)$chat->id ?>;
+    const csrf = <?= json_encode($csrf) ?>;
+
+    // Handle Set Role button
+    document.querySelector('[data-chat-action="set-role"]')?.addEventListener('click', async function() {
+        document.getElementById('chat-header-menu')?.classList.add('hidden');
+        const modal = document.getElementById('set-role-modal');
+        modal.classList.remove('hidden');
+
+        const res = await fetch('/api/roles');
+        const data = await res.json();
+        const roles = data.roles || [];
+        const currentRoleId = <?= (int)($chatRequiredRole->id ?? 0) ?>;
+
+        const opts = document.getElementById('set-role-options');
+        let html = `<button type="button" onclick="setChatRole(0)" class="w-full text-left text-sm px-3 py-2 rounded-lg ${currentRoleId === 0 ? 'bg-emerald-700 text-emerald-100' : 'bg-zinc-800 hover:bg-zinc-700'}">No restriction (open to all)</button>`;
+        roles.forEach(r => {
+            const active = Number(r.id) === currentRoleId;
+            html += `<button type="button" onclick="setChatRole(${r.id})" class="w-full text-left text-sm px-3 py-2 rounded-lg flex items-center gap-2 ${active ? 'bg-indigo-700 text-indigo-100' : 'bg-zinc-800 hover:bg-zinc-700'}">
+                <span class="inline-block w-3 h-3 rounded-full shrink-0" style="background:${r.color}"></span>
+                ${r.name}
+            </button>`;
+        });
+        opts.innerHTML = html;
+    });
+
+    window.setChatRole = async function(roleId) {
+        const fd = new FormData();
+        fd.append('csrf_token', csrf);
+        fd.append('chat_id', chatId);
+        fd.append('role_id', roleId);
+
+        const res = await fetch('/admin/roles/chat/set', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (data.error) return alert(data.error);
+        location.reload();
+    };
+
+    // Handle Temp Access button
+    document.querySelector('[data-chat-action="temp-access"]')?.addEventListener('click', function() {
+        document.getElementById('chat-header-menu')?.classList.add('hidden');
+        document.getElementById('temp-access-modal').classList.remove('hidden');
+        loadTempAccessList();
+    });
+
+    async function loadTempAccessList() {
+        const res = await fetch('/api/roles/temp-access?chat_id=' + chatId);
+        const data = await res.json();
+        const list = document.getElementById('temp-access-list');
+        const items = data.temp_access || [];
+
+        if (items.length === 0) {
+            list.innerHTML = '<p class="text-zinc-400 text-sm">No active temp access entries.</p>';
+            return;
+        }
+
+        list.innerHTML = items.map(item => {
+            const expires = item.expires_at ? item.expires_at : 'Never';
+            return `<div class="flex items-center justify-between bg-zinc-800 rounded-lg px-3 py-2">
+                <div>
+                    <span class="text-sm font-medium">${item.username}</span>
+                    <span class="text-xs text-zinc-400 ml-2">expires: ${expires}</span>
+                </div>
+                <button type="button" onclick="revokeTempAccess(${item.user_id})" class="text-sm px-3 py-1 rounded-lg bg-red-700 hover:bg-red-600 text-red-100">Revoke</button>
+            </div>`;
+        }).join('');
+    }
+
+    window.grantTempAccess = async function() {
+        const username = document.getElementById('temp-access-username').value.trim();
+        const duration = document.getElementById('temp-access-duration').value;
+        if (!username) return alert('Enter a username');
+
+        // Look up user by username
+        const searchRes = await fetch('/api/users/search?q=' + encodeURIComponent(username));
+        const searchData = await searchRes.json();
+        const users = searchData.users || [];
+        if (users.length === 0) return alert('User not found');
+
+        const targetUser = users.find(u => u.username.toLowerCase() === username.toLowerCase());
+        if (!targetUser) return alert('User not found');
+
+        const fd = new FormData();
+        fd.append('csrf_token', csrf);
+        fd.append('chat_id', chatId);
+        fd.append('user_id', targetUser.id);
+        fd.append('duration', duration);
+
+        const res = await fetch('/admin/roles/temp-access/grant', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (data.error) return alert(data.error);
+
+        document.getElementById('temp-access-username').value = '';
+        loadTempAccessList();
+    };
+
+    window.revokeTempAccess = async function(userId) {
+        const fd = new FormData();
+        fd.append('csrf_token', csrf);
+        fd.append('chat_id', chatId);
+        fd.append('user_id', userId);
+
+        const res = await fetch('/admin/roles/temp-access/revoke', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (data.error) return alert(data.error);
+        loadTempAccessList();
+    };
+})();
+</script>
+<?php endif; ?>

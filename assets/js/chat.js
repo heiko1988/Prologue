@@ -1521,6 +1521,15 @@ async function loadSidebarChats() {
             primaryLine.appendChild(star);
         }
 
+        if (chat.required_role_name && chat.required_role_color) {
+            const roleBadge = document.createElement('span');
+            roleBadge.className = 'text-[10px] px-1.5 py-0.5 rounded-full text-white shrink-0';
+            roleBadge.style.background = String(chat.required_role_color);
+            roleBadge.textContent = String(chat.required_role_name);
+            roleBadge.title = 'Required role: ' + String(chat.required_role_name);
+            primaryLine.appendChild(roleBadge);
+        }
+
         if (hasPersonalStatus) {
             const statusDot = document.createElement('span');
             statusDot.className = `inline-block w-2 h-2 rounded-full ${String(chat.effective_status_dot_class || 'bg-zinc-500')}`;

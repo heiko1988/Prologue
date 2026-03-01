@@ -56,6 +56,9 @@
                                             <?= htmlspecialchars($managedIsAdmin ? 'admin' : 'user', ENT_QUOTES, 'UTF-8') ?>
                                         </span>
                                         <span id="admin-user-banned-badge-<?= (int)$managedUser->id ?>" class="text-[11px] px-2 py-0.5 rounded-full bg-red-800 text-red-100 <?= $managedIsBanned ? '' : 'hidden' ?>">banned</span>
+                                        <?php if (Role::supportsRoles()): ?>
+                                        <span id="admin-user-custom-roles-<?= (int)$managedUser->id ?>" class="inline-flex flex-wrap gap-1"></span>
+                                        <?php endif; ?>
                                     </div>
                                 </div>
                             </div>
@@ -65,6 +68,7 @@
                                 <div id="admin-user-menu-<?= (int)$managedUser->id ?>" data-admin-user-menu class="hidden absolute right-0 mt-2 w-56 bg-zinc-900 border border-zinc-700 rounded-xl p-3 z-30 space-y-3">
                                     <div class="space-y-2">
                                         <button type="button" id="admin-user-role-action-<?= (int)$managedUser->id ?>" class="w-full text-left text-sm px-3 py-2 rounded-lg <?= $managedIsAdmin ? 'bg-amber-700 hover:bg-amber-600 text-amber-100' : 'bg-emerald-700 hover:bg-emerald-600 text-emerald-100' ?>" onclick="confirmAdminUserRoleAction(<?= (int)$managedUser->id ?>)"><?= $managedIsAdmin ? 'Demote' : 'Promote' ?></button>
+                                        <button type="button" class="w-full text-left bg-indigo-700 hover:bg-indigo-600 text-indigo-100 text-sm px-3 py-2 rounded-lg" onclick="openUserRolesModal(<?= (int)$managedUser->id ?>, '<?= htmlspecialchars($managedUser->username, ENT_QUOTES, 'UTF-8') ?>')">Manage Roles</button>
                                         <button type="button" id="admin-user-ban-action-<?= (int)$managedUser->id ?>" class="w-full text-left bg-amber-700 hover:bg-amber-600 text-amber-100 text-sm px-3 py-2 rounded-lg" onclick="confirmAdminUserBanAction(<?= (int)$managedUser->id ?>)"><?= $managedIsBanned ? 'Unban' : 'Ban' ?></button>
                                         <button type="button" class="w-full text-left bg-red-700 hover:bg-red-600 text-red-100 text-sm px-3 py-2 rounded-lg" onclick="deleteAdminUser(<?= (int)$managedUser->id ?>)">Delete user</button>
                                     </div>
@@ -94,3 +98,108 @@
         </div>
     </div>
 </div>
+
+<!-- User Roles Modal -->
+<div id="user-roles-modal" class="hidden fixed inset-0 bg-black/70 z-50 p-4 md:p-6" aria-hidden="true">
+    <div class="h-full w-full flex items-center justify-center">
+        <div class="w-full max-w-md bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-6" role="dialog">
+            <h2 class="text-lg font-semibold text-zinc-100 mb-1">Manage Roles</h2>
+            <p id="user-roles-modal-username" class="text-sm text-zinc-400 mb-4"></p>
+            <input type="hidden" id="user-roles-modal-user-id">
+            <div id="user-roles-modal-list" class="space-y-2 max-h-64 overflow-y-auto"></div>
+            <div class="mt-5 flex items-center justify-end">
+                <button type="button" onclick="closeUserRolesModal()" class="px-4 py-2 rounded-xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-zinc-200">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+async function loadUserRoleBadges() {
+    const cards = document.querySelectorAll('[data-admin-user-id]');
+    for (const card of cards) {
+        const userId = card.dataset.adminUserId;
+        const container = document.getElementById('admin-user-custom-roles-' + userId);
+        if (!container) continue;
+        try {
+            const res = await fetch('/api/roles/user?user_id=' + userId);
+            const data = await res.json();
+            if (data.roles && data.roles.length > 0) {
+                container.innerHTML = data.roles.map(r =>
+                    `<span class="text-[11px] px-2 py-0.5 rounded-full text-white" style="background:${r.color}">${r.name}</span>`
+                ).join('');
+            } else {
+                container.innerHTML = '';
+            }
+        } catch(e) {}
+    }
+}
+
+let _allRolesCache = null;
+async function getAllRoles() {
+    if (_allRolesCache) return _allRolesCache;
+    const res = await fetch('/api/roles');
+    const data = await res.json();
+    _allRolesCache = data.roles || [];
+    return _allRolesCache;
+}
+
+async function openUserRolesModal(userId, username) {
+    document.getElementById('user-roles-modal-user-id').value = userId;
+    document.getElementById('user-roles-modal-username').textContent = username;
+    document.getElementById('user-roles-modal').classList.remove('hidden');
+
+    // Close the actions menu
+    const menu = document.getElementById('admin-user-menu-' + userId);
+    if (menu) menu.classList.add('hidden');
+
+    const allRoles = await getAllRoles();
+    const res = await fetch('/api/roles/user?user_id=' + userId);
+    const data = await res.json();
+    const userRoleIds = (data.roles || []).map(r => Number(r.id));
+
+    const list = document.getElementById('user-roles-modal-list');
+    if (allRoles.length === 0) {
+        list.innerHTML = '<p class="text-zinc-400 text-sm">No roles created yet. Create roles in Admin > Roles.</p>';
+        return;
+    }
+
+    list.innerHTML = allRoles.map(r => {
+        const hasRole = userRoleIds.includes(Number(r.id));
+        return `<div class="flex items-center justify-between bg-zinc-800 rounded-lg px-3 py-2">
+            <div class="flex items-center gap-2">
+                <span class="inline-block w-3 h-3 rounded-full" style="background:${r.color}"></span>
+                <span class="text-sm">${r.name}</span>
+            </div>
+            <button type="button" onclick="toggleUserRole(${userId}, ${r.id}, ${hasRole ? 'true' : 'false'}, this)"
+                class="text-sm px-3 py-1 rounded-lg ${hasRole ? 'bg-red-700 hover:bg-red-600 text-red-100' : 'bg-emerald-700 hover:bg-emerald-600 text-emerald-100'}">
+                ${hasRole ? 'Remove' : 'Assign'}
+            </button>
+        </div>`;
+    }).join('');
+}
+
+function closeUserRolesModal() {
+    document.getElementById('user-roles-modal').classList.add('hidden');
+    loadUserRoleBadges();
+}
+
+async function toggleUserRole(userId, roleId, hasRole, btn) {
+    const url = hasRole ? '/admin/roles/remove' : '/admin/roles/assign';
+    const fd = new FormData();
+    fd.append('csrf_token', window.CSRF_TOKEN);
+    fd.append('user_id', userId);
+    fd.append('role_id', roleId);
+
+    const res = await fetch(url, { method: 'POST', body: fd });
+    const data = await res.json();
+    if (data.error) return alert(data.error);
+
+    // Re-open modal to refresh
+    const username = document.getElementById('user-roles-modal-username').textContent;
+    _allRolesCache = null;
+    openUserRolesModal(userId, username);
+}
+
+document.addEventListener('DOMContentLoaded', loadUserRoleBadges);
+</script>
