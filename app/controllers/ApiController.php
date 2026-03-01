@@ -1,5 +1,15 @@
 <?php
 class ApiController extends Controller {
+
+    private function supportsMessageEditDelete(): bool {
+        static $supports = null;
+        if ($supports !== null) return $supports;
+        try {
+            $r = Database::query("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'messages' AND COLUMN_NAME = 'edited_at'")->fetchColumn();
+            $supports = ((int)$r) > 0;
+        } catch (Throwable $e) { $supports = false; }
+        return $supports;
+    }
     private function getPinnedMessageSettingKey(int $chatId): string {
         return 'pinned_message_chat_' . $chatId;
     }
@@ -544,6 +554,7 @@ class ApiController extends Controller {
         try {
             $messages = Database::query(
                 "SELECT m.id, m.chat_id, m.user_id, m.content, m.created_at,
+                        " . ($this->supportsMessageEditDelete() ? "m.edited_at, m.deleted_at," : "") . "
                         m.quoted_message_id, m.quoted_user_id, m.quoted_content,
                         u.username, u.email AS user_email, u.user_number, u.avatar_filename, u.presence_status, u.last_active_at,
                         qu.username AS quoted_username, qu.user_number AS quoted_user_number
@@ -562,6 +573,7 @@ class ApiController extends Controller {
 
             $messages = Database::query(
                 "SELECT m.id, m.chat_id, m.user_id, m.content, m.created_at,
+                        " . ($this->supportsMessageEditDelete() ? "m.edited_at, m.deleted_at," : "") . "
                         m.quoted_message_id, m.quoted_user_id, m.quoted_content,
                         u.username, u.email AS user_email, u.user_number, u.presence_status, u.last_active_at,
                         qu.username AS quoted_username, qu.user_number AS quoted_user_number
@@ -578,6 +590,14 @@ class ApiController extends Controller {
             $message->username = User::decorateDeletedRetainedUsername($message->username ?? '', $message->user_email ?? null);
             $message->avatar_url = User::avatarUrl($message);
             User::attachEffectiveStatus($message);
+            // Mask deleted message content
+            if (!empty($message->deleted_at)) {
+                $message->content = '';
+                $message->is_deleted = true;
+            } else {
+                $message->is_deleted = false;
+            }
+            $message->is_edited = !empty($message->edited_at);
         }
         Message::attachMentionMaps($messages);
         Message::attachQuoteMentionMaps($messages);

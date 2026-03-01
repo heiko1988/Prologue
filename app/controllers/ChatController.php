@@ -1442,4 +1442,137 @@ class ChatController extends Controller {
 
         $this->json(['success' => true]);
     }
+
+    private function supportsMessageEditDelete(): bool {
+        static $supports = null;
+        if ($supports !== null) return $supports;
+        try {
+            $r = Database::query("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'messages' AND COLUMN_NAME = 'edited_at'")->fetchColumn();
+            $supports = ((int)$r) > 0;
+        } catch (Throwable $e) { $supports = false; }
+        return $supports;
+    }
+
+    public function editMessage() {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+
+        if (!$this->supportsMessageEditDelete()) {
+            $this->json(['error' => 'Message editing requires a database update'], 400);
+        }
+
+        $messageId = (int)($_POST['message_id'] ?? 0);
+        $content = trim((string)($_POST['content'] ?? ''));
+        $authUser = Auth::user();
+        $userId = (int)$authUser->id;
+
+        if ($messageId <= 0) {
+            $this->json(['error' => 'Invalid message ID'], 400);
+        }
+
+        if ($content === '') {
+            $this->json(['error' => 'Message content cannot be empty'], 400);
+        }
+
+        if (mb_strlen($content) > 5000) {
+            $this->json(['error' => 'Message is too long'], 400);
+        }
+
+        $message = Database::query(
+            "SELECT id, chat_id, user_id, deleted_at FROM messages WHERE id = ?",
+            [$messageId]
+        )->fetch();
+
+        if (!$message) {
+            $this->json(['error' => 'Message not found'], 404);
+        }
+
+        if ($message->deleted_at !== null) {
+            $this->json(['error' => 'Cannot edit a deleted message'], 400);
+        }
+
+        // Only the author can edit their own message
+        if ((int)$message->user_id !== $userId) {
+            $this->json(['error' => 'You can only edit your own messages'], 403);
+        }
+
+        // Verify user is member of the chat
+        $member = Database::query(
+            "SELECT id FROM chat_members WHERE chat_id = ? AND user_id = ?",
+            [(int)$message->chat_id, $userId]
+        )->fetch();
+        if (!$member) {
+            $this->json(['error' => 'Access denied'], 403);
+        }
+
+        Database::query(
+            "UPDATE messages SET content = ?, edited_at = NOW() WHERE id = ?",
+            [$content, $messageId]
+        );
+
+        $this->json(['success' => true, 'message_id' => $messageId]);
+    }
+
+    public function deleteMessage() {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+
+        if (!$this->supportsMessageEditDelete()) {
+            $this->json(['error' => 'Message deletion requires a database update'], 400);
+        }
+
+        $messageId = (int)($_POST['message_id'] ?? 0);
+        $authUser = Auth::user();
+        $userId = (int)$authUser->id;
+        $isAdmin = Auth::isAdmin($authUser);
+
+        if ($messageId <= 0) {
+            $this->json(['error' => 'Invalid message ID'], 400);
+        }
+
+        $message = Database::query(
+            "SELECT id, chat_id, user_id, deleted_at FROM messages WHERE id = ?",
+            [$messageId]
+        )->fetch();
+
+        if (!$message) {
+            $this->json(['error' => 'Message not found'], 404);
+        }
+
+        if ($message->deleted_at !== null) {
+            $this->json(['error' => 'Message is already deleted'], 400);
+        }
+
+        // Author or admin can delete
+        $isAuthor = ((int)$message->user_id === $userId);
+        if (!$isAuthor && !$isAdmin) {
+            $this->json(['error' => 'You can only delete your own messages'], 403);
+        }
+
+        // Verify membership (unless admin)
+        if (!$isAdmin) {
+            $member = Database::query(
+                "SELECT id FROM chat_members WHERE chat_id = ? AND user_id = ?",
+                [(int)$message->chat_id, $userId]
+            )->fetch();
+            if (!$member) {
+                $this->json(['error' => 'Access denied'], 403);
+            }
+        }
+
+        // Soft-delete the message
+        Database::query(
+            "UPDATE messages SET deleted_at = NOW() WHERE id = ?",
+            [$messageId]
+        );
+
+        // If this message was pinned, unpin it
+        $settingKey = 'pinned_message_chat_' . (int)$message->chat_id;
+        $pinnedId = (int)(Setting::get($settingKey) ?? 0);
+        if ($pinnedId === $messageId) {
+            Database::query("DELETE FROM settings WHERE `key` = ?", [$settingKey]);
+        }
+
+        $this->json(['success' => true, 'message_id' => $messageId]);
+    }
 }

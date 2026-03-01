@@ -27,6 +27,10 @@ class UpdateController extends Controller {
                 "CREATE TABLE IF NOT EXISTS chat_bans (id INT AUTO_INCREMENT PRIMARY KEY, chat_id INT NOT NULL, user_id INT NOT NULL, banned_by INT DEFAULT NULL, reason VARCHAR(255) DEFAULT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY uq_chat_ban (chat_id, user_id), FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE CASCADE, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY (banned_by) REFERENCES users(id) ON DELETE SET NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
                 "ALTER TABLE roles ADD INDEX idx_roles_position (position DESC)",
             ],
+            '0.1.2' => [
+                "ALTER TABLE messages ADD COLUMN edited_at TIMESTAMP NULL DEFAULT NULL AFTER created_at",
+                "ALTER TABLE messages ADD COLUMN deleted_at TIMESTAMP NULL DEFAULT NULL AFTER edited_at",
+            ],
         ];
     }
 

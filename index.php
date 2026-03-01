@@ -251,6 +251,8 @@ $router->post('/api/messages', 'ChatController@sendMessage'); // also used by we
 $router->post('/api/messages/react', 'ChatController@reactMessage');
 $router->post('/api/messages/pin', 'ApiController@pinMessage');
 $router->post('/api/messages/unpin', 'ApiController@unpinMessage');
+$router->post('/api/messages/edit', 'ChatController@editMessage');
+$router->post('/api/messages/delete', 'ChatController@deleteMessage');
 $router->post('/api/posts', 'PostController@create');
 $router->post('/api/posts/react', 'PostController@react');
 $router->post('/api/posts/delete', 'PostController@delete');
