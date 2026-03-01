@@ -54,6 +54,112 @@
                 z-index: 49;
             }
         }
+        /* ===== Mobile phone optimizations (< 640px) ===== */
+        @media (max-width: 639px) {
+            /* Compact message form */
+            #message-form {
+                padding: 0.5rem 0.75rem !important;
+                gap: 0 !important;
+            }
+            /* Input row: always single line */
+            #message-composer-controls {
+                flex-wrap: nowrap !important;
+                gap: 0.5rem !important;
+            }
+            #message-composer-controls > * {
+                order: unset !important;
+            }
+            /* Attachment button: small square icon */
+            #attachments-toggle {
+                width: 3rem !important;
+                min-height: 2.75rem !important;
+                flex-shrink: 0;
+                order: 1 !important;
+            }
+            /* Message input: fill remaining space */
+            #message-input {
+                flex: 1 1 0% !important;
+                width: 0 !important;
+                min-width: 0 !important;
+                padding: 0.625rem 1rem !important;
+                min-height: 2.75rem !important;
+                font-size: 16px !important; /* prevents iOS zoom */
+                order: 2 !important;
+            }
+            /* Send button: compact */
+            #message-form button[type="submit"] {
+                width: auto !important;
+                min-width: 3rem !important;
+                padding-left: 1rem !important;
+                padding-right: 1rem !important;
+                min-height: 2.75rem !important;
+                font-size: 0;
+                order: 3 !important;
+            }
+            #message-form button[type="submit"]::after {
+                content: "\f1d8";
+                font-family: "Font Awesome 6 Free";
+                font-weight: 900;
+                font-size: 1rem;
+            }
+            /* Chat header: less padding */
+            #chat-view > .border-b:first-child {
+                padding-left: 0.75rem !important;
+                padding-right: 0.75rem !important;
+                height: 3rem !important;
+            }
+            /* Group members: compact */
+            #chat-view > .border-b:nth-child(2) {
+                padding: 0.375rem 0.75rem !important;
+            }
+            #chat-view > .border-b:nth-child(2) .text-xs.uppercase {
+                display: none;
+            }
+            /* Messages area: less horizontal padding */
+            #messages-container {
+                padding-left: 0.75rem !important;
+                padding-right: 0.75rem !important;
+            }
+            #messages-container > div {
+                padding-left: 0 !important;
+                padding-right: 0 !important;
+            }
+            /* Typing indicator */
+            #typing-indicator {
+                padding-left: 0.75rem !important;
+                padding-right: 0.75rem !important;
+            }
+            /* Quote preview: match reduced padding */
+            #quote-preview {
+                left: 0.75rem !important;
+                right: 0.75rem !important;
+            }
+            /* Drawers: match reduced padding */
+            #emoji-drawer, #attachments-drawer {
+                left: 0.75rem !important;
+                right: 0.75rem !important;
+            }
+            /* Message action buttons: bigger tap targets */
+            .js-quote-link,
+            .js-reaction-toggle {
+                padding: 0.5rem !important;
+                min-width: 2.5rem;
+                min-height: 2.5rem;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+            }
+            /* Pinned message: compact */
+            #pinned-message-container {
+                padding: 0.375rem 0.75rem !important;
+            }
+            /* Long-press context hint via touch-action */
+            .group.flex.items-start {
+                -webkit-touch-callout: none;
+                -webkit-user-select: none;
+                user-select: none;
+            }
+        }
     </style>
 </head>
 <?php $currentUser = Auth::user(); ?>
@@ -61,7 +167,7 @@
     <?php
         $requestPath = (string)parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH);
         $isChatRoute = preg_match('#(?:^|/)c/[^/]+$#', $requestPath) === 1;
-        $mobileFabBottomClass = $isChatRoute ? 'bottom-44 sm:bottom-24' : 'bottom-5';
+        $mobileFabBottomClass = $isChatRoute ? 'bottom-16 sm:bottom-24' : 'bottom-5';
     ?>
     <?php
         $browserNotificationsEnabled = false;
@@ -373,13 +479,13 @@
     <div id="mobile-overlay-backdrop"></div>
 
     <div class="lg:hidden fixed <?= $mobileFabBottomClass ?> left-5 z-30">
-        <button id="sidebar-toggle-mobile" class="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 shadow-lg flex items-center justify-center" aria-label="Open menu">
+        <button id="sidebar-toggle-mobile" class="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 shadow-lg flex items-center justify-center" aria-label="Open menu">
             <i class="fa-solid fa-bars text-lg"></i>
         </button>
     </div>
 
     <div class="lg:hidden fixed <?= $mobileFabBottomClass ?> right-5 z-30">
-        <button id="notification-history-button-mobile" class="relative w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 shadow-lg flex items-center justify-center" aria-label="Open notifications">
+        <button id="notification-history-button-mobile" class="relative w-11 h-11 sm:w-14 sm:h-14 rounded-2xl bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 shadow-lg flex items-center justify-center" aria-label="Open notifications">
             <i class="fa-regular fa-bell text-lg"></i>
             <span id="notification-history-count-mobile" class="hidden absolute -top-2 -right-2 min-w-[1.25rem] h-5 px-1 rounded-full bg-emerald-600 text-white text-xs flex items-center justify-center">0</span>
         </button>

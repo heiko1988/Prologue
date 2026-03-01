@@ -2865,3 +2865,140 @@ function renderMessages(messages, options = {}) {
 
     box.scrollTop = box.scrollHeight;
 }
+
+/* ===== Mobile: Long-press context menu for messages ===== */
+(function initMobileLongPress() {
+    if (!('ontouchstart' in window)) return; // only on touch devices
+
+    let pressTimer = null;
+    let pressTarget = null;
+
+    const menu = document.createElement('div');
+    menu.id = 'mobile-msg-menu';
+    menu.className = 'fixed z-50 bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-1 hidden';
+    menu.style.minWidth = '10rem';
+    menu.innerHTML = '';
+    document.body.appendChild(menu);
+
+    const style = document.createElement('style');
+    style.textContent = `
+        #mobile-msg-menu button {
+            display: flex; align-items: center; gap: 0.5rem;
+            width: 100%; text-align: left; padding: 0.625rem 0.875rem;
+            border-radius: 0.75rem; font-size: 0.875rem; color: #d4d4d8;
+        }
+        #mobile-msg-menu button:active { background: #27272a; }
+    `;
+    document.head.appendChild(style);
+
+    function showMenu(x, y, msgEl) {
+        const msgId = msgEl.getAttribute('data-message-id');
+        if (!msgId) return;
+
+        // Find quote button data from the existing quote link
+        const quoteBtn = msgEl.querySelector('.js-quote-link');
+        const reactBtn = msgEl.querySelector('.js-reaction-toggle');
+
+        let html = '';
+        if (quoteBtn) {
+            html += `<button data-action="quote" data-msg-id="${msgId}"><i class="fa-solid fa-reply text-zinc-500"></i> Reply</button>`;
+        }
+        if (reactBtn) {
+            html += `<button data-action="react" data-msg-id="${msgId}"><i class="fa-regular fa-face-smile text-zinc-500"></i> React</button>`;
+        }
+        // Copy message text
+        html += `<button data-action="copy" data-msg-id="${msgId}"><i class="fa-regular fa-copy text-zinc-500"></i> Copy</button>`;
+
+        if (!html) return;
+        menu.innerHTML = html;
+        menu.classList.remove('hidden');
+
+        // Position: ensure it stays in viewport
+        const menuRect = menu.getBoundingClientRect();
+        let left = Math.min(x, window.innerWidth - menuRect.width - 8);
+        let top = Math.min(y, window.innerHeight - menuRect.height - 8);
+        left = Math.max(8, left);
+        top = Math.max(8, top);
+        menu.style.left = left + 'px';
+        menu.style.top = top + 'px';
+    }
+
+    function hideMenu() {
+        menu.classList.add('hidden');
+        menu.innerHTML = '';
+    }
+
+    // Handle menu actions
+    menu.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-action]');
+        if (!btn) return;
+        const action = btn.dataset.action;
+        const msgId = btn.dataset.msgId;
+        const msgEl = document.querySelector(`[data-message-id="${msgId}"]`);
+
+        if (action === 'quote' && msgEl) {
+            const quoteBtn = msgEl.querySelector('.js-quote-link');
+            if (quoteBtn) quoteBtn.click();
+        } else if (action === 'react' && msgEl) {
+            const reactBtn = msgEl.querySelector('.js-reaction-toggle');
+            if (reactBtn) reactBtn.click();
+        } else if (action === 'copy' && msgEl) {
+            const contentEl = msgEl.querySelector('.js-message-content, .whitespace-pre-wrap');
+            const text = contentEl ? contentEl.textContent.trim() : '';
+            if (text && navigator.clipboard) {
+                navigator.clipboard.writeText(text).catch(() => {});
+            }
+        }
+        hideMenu();
+    });
+
+    // Close menu on outside tap
+    document.addEventListener('touchstart', (e) => {
+        if (!menu.contains(e.target)) hideMenu();
+    });
+
+    // Long-press detection on message elements
+    const container = document.getElementById('messages-container');
+    if (!container) return;
+
+    container.addEventListener('touchstart', (e) => {
+        const msgEl = e.target.closest('[data-message-id]');
+        if (!msgEl) return;
+        // Don't trigger on links, buttons, images
+        if (e.target.closest('a, button, img, .js-lightbox-trigger')) return;
+
+        const touch = e.touches[0];
+        pressTarget = { el: msgEl, x: touch.clientX, y: touch.clientY };
+        pressTimer = setTimeout(() => {
+            if (pressTarget) {
+                // Haptic feedback if available
+                if (navigator.vibrate) navigator.vibrate(30);
+                showMenu(pressTarget.x, pressTarget.y, pressTarget.el);
+                pressTarget = null;
+            }
+        }, 500);
+    }, { passive: true });
+
+    container.addEventListener('touchmove', (e) => {
+        if (pressTimer) {
+            const touch = e.touches[0];
+            if (pressTarget && (Math.abs(touch.clientX - pressTarget.x) > 10 || Math.abs(touch.clientY - pressTarget.y) > 10)) {
+                clearTimeout(pressTimer);
+                pressTimer = null;
+                pressTarget = null;
+            }
+        }
+    }, { passive: true });
+
+    container.addEventListener('touchend', () => {
+        clearTimeout(pressTimer);
+        pressTimer = null;
+        pressTarget = null;
+    }, { passive: true });
+
+    container.addEventListener('touchcancel', () => {
+        clearTimeout(pressTimer);
+        pressTimer = null;
+        pressTarget = null;
+    }, { passive: true });
+})();
