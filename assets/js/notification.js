@@ -525,6 +525,10 @@ function playNotificationSoundBucket(bucket) {
     }
 
     audio.currentTime = 0;
+    if (typeof audio.setSinkId === 'function') {
+        var _sinkId = localStorage.getItem('prologue.selectedSinkId');
+        if (_sinkId) audio.setSinkId(_sinkId).catch(function() {});
+    }
     audio.play().catch(() => {});
 }
 
@@ -581,6 +585,10 @@ function bindNotificationSoundPreviewButtons() {
             }
 
             audio.currentTime = 0;
+            if (typeof audio.setSinkId === 'function') {
+                var _sinkId = localStorage.getItem('prologue.selectedSinkId');
+                if (_sinkId) audio.setSinkId(_sinkId).catch(function() {});
+            }
             audio.play().catch(() => {});
 
             activeButton = previewButton;
