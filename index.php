@@ -220,6 +220,7 @@ $router->post('/admin/roles/temp-access/grant', 'RoleController@grantTempAccess'
 $router->post('/admin/roles/temp-access/revoke', 'RoleController@revokeTempAccess');
 $router->get('/api/roles', 'RoleController@list');
 $router->get('/api/roles/temp-access', 'RoleController@getTempAccess');
+$router->get('/api/roles/temp-access/user', 'RoleController@getUserTempAccess');
 $router->get('/api/roles/user', 'RoleController@getUserRoles');
 
 // Friends

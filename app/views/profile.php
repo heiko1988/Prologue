@@ -188,6 +188,146 @@ $renderPostReactionPicker = static function (int $postId) use ($postReactionCode
     </div>
 </div>
 
+<?php if ($isCurrentUserAdmin && Role::supportsRoles()): ?>
+<div class="px-8 pb-4">
+    <div class="w-full grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Roles Section -->
+        <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-5">
+            <h3 class="text-sm font-semibold text-zinc-400 uppercase tracking-wide mb-3">Roles</h3>
+            <div id="profile-roles-list" class="space-y-2 mb-3"></div>
+            <div class="flex items-center gap-2">
+                <select id="profile-role-add-select" class="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm">
+                    <option value="">Add role...</option>
+                </select>
+                <button type="button" onclick="profileAssignRole()" class="bg-emerald-700 hover:bg-emerald-600 text-white text-sm px-3 py-2 rounded-lg">Add</button>
+            </div>
+        </section>
+
+        <!-- Temp Access Section -->
+        <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-5">
+            <h3 class="text-sm font-semibold text-zinc-400 uppercase tracking-wide mb-3">Temporary Chat Access</h3>
+            <div id="profile-temp-access-list" class="space-y-2 max-h-48 overflow-y-auto"></div>
+            <p id="profile-temp-access-empty" class="text-zinc-500 text-sm hidden">No active temp access.</p>
+        </section>
+    </div>
+</div>
+
+<script>
+(function(){
+    const profileUserId = <?= (int)$profile->id ?>;
+    const csrf = <?= json_encode($csrf ?? '') ?>;
+
+    function formatExpiresAt(expiresAt) {
+        if (!expiresAt) return 'Unlimited';
+        const exp = new Date(expiresAt + ' UTC');
+        const now = new Date();
+        const diffMs = exp - now;
+        if (diffMs <= 0) return 'Expired';
+        const diffMin = Math.floor(diffMs / 60000);
+        if (diffMin < 60) return diffMin + 'min left';
+        const diffH = Math.floor(diffMin / 60);
+        if (diffH < 24) return diffH + 'h ' + (diffMin % 60) + 'min left';
+        const diffD = Math.floor(diffH / 24);
+        return diffD + 'd ' + (diffH % 24) + 'h left';
+    }
+
+    async function loadProfileRoles() {
+        const [rolesRes, userRolesRes] = await Promise.all([
+            fetch('/api/roles'),
+            fetch('/api/roles/user?user_id=' + profileUserId)
+        ]);
+        const allRoles = (await rolesRes.json()).roles || [];
+        const userRoles = (await userRolesRes.json()).roles || [];
+        const userRoleIds = userRoles.map(r => Number(r.id));
+
+        const list = document.getElementById('profile-roles-list');
+        if (userRoles.length === 0) {
+            list.innerHTML = '<p class="text-zinc-500 text-sm">No roles assigned.</p>';
+        } else {
+            list.innerHTML = userRoles.map(r =>
+                `<div class="flex items-center justify-between bg-zinc-800 rounded-lg px-3 py-2">
+                    <div class="flex items-center gap-2">
+                        <span class="inline-block w-3 h-3 rounded-full" style="background:${r.color}"></span>
+                        <span class="text-sm">${r.name}</span>
+                    </div>
+                    <button type="button" onclick="profileRemoveRole(${r.id})" class="text-sm px-3 py-1 rounded-lg bg-red-700 hover:bg-red-600 text-red-100">Remove</button>
+                </div>`
+            ).join('');
+        }
+
+        const select = document.getElementById('profile-role-add-select');
+        const available = allRoles.filter(r => !userRoleIds.includes(Number(r.id)));
+        select.innerHTML = '<option value="">Add role...</option>' +
+            available.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
+    }
+
+    async function loadProfileTempAccess() {
+        const res = await fetch('/api/roles/temp-access/user?user_id=' + profileUserId);
+        const data = await res.json();
+        const items = data.temp_access || [];
+        const list = document.getElementById('profile-temp-access-list');
+        const empty = document.getElementById('profile-temp-access-empty');
+
+        if (items.length === 0) {
+            list.innerHTML = '';
+            empty.classList.remove('hidden');
+            return;
+        }
+        empty.classList.add('hidden');
+        list.innerHTML = items.map(item => {
+            const expiresLabel = formatExpiresAt(item.expires_at);
+            const isExpired = expiresLabel === 'Expired';
+            return `<div class="flex items-center justify-between bg-zinc-800 rounded-lg px-3 py-2">
+                <div class="min-w-0">
+                    <span class="text-sm font-medium">${item.chat_title || ('Chat #' + (item.chat_number || item.chat_id))}</span>
+                    <span class="text-xs ${isExpired ? 'text-red-400' : 'text-zinc-400'} ml-2">${expiresLabel}</span>
+                </div>
+                <button type="button" onclick="profileRevokeTempAccess(${item.chat_id})" class="text-sm px-3 py-1 rounded-lg bg-red-700 hover:bg-red-600 text-red-100 shrink-0">Revoke</button>
+            </div>`;
+        }).join('');
+    }
+
+    window.profileAssignRole = async function() {
+        const roleId = document.getElementById('profile-role-add-select').value;
+        if (!roleId) return;
+        const fd = new FormData();
+        fd.append('csrf_token', csrf);
+        fd.append('user_id', profileUserId);
+        fd.append('role_id', roleId);
+        const res = await fetch('/admin/roles/assign', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (data.error) return alert(data.error);
+        loadProfileRoles();
+    };
+
+    window.profileRemoveRole = async function(roleId) {
+        const fd = new FormData();
+        fd.append('csrf_token', csrf);
+        fd.append('user_id', profileUserId);
+        fd.append('role_id', roleId);
+        const res = await fetch('/admin/roles/remove', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (data.error) return alert(data.error);
+        loadProfileRoles();
+    };
+
+    window.profileRevokeTempAccess = async function(chatId) {
+        const fd = new FormData();
+        fd.append('csrf_token', csrf);
+        fd.append('chat_id', chatId);
+        fd.append('user_id', profileUserId);
+        const res = await fetch('/admin/roles/temp-access/revoke', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (data.error) return alert(data.error);
+        loadProfileTempAccess();
+    };
+
+    loadProfileRoles();
+    loadProfileTempAccess();
+})();
+</script>
+<?php endif; ?>
+
 <div class="px-8 pb-8" id="profile-posts-root" data-profile-user-id="<?= (int)$profile->id ?>" data-can-react-posts="<?= !empty($canReactToPosts) ? '1' : '0' ?>">
     <div class="flex items-center justify-between gap-3 mb-4">
         <h2 class="text-xl font-semibold text-zinc-100">Posts</h2>

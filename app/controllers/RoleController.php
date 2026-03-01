@@ -268,4 +268,16 @@ class RoleController extends Controller {
         $roles = Role::getUserRoles($userId);
         $this->json(['roles' => $roles]);
     }
+
+    public function getUserTempAccess() {
+        $this->requireAdminUser();
+
+        $userId = (int)($_GET['user_id'] ?? 0);
+        if ($userId <= 0) {
+            $this->json(['error' => 'Invalid user ID'], 400);
+        }
+
+        $list = Role::getTempAccessListByUser($userId);
+        $this->json(['temp_access' => $list]);
+    }
 }

@@ -69,6 +69,7 @@
                                     <div class="space-y-2">
                                         <button type="button" id="admin-user-role-action-<?= (int)$managedUser->id ?>" class="w-full text-left text-sm px-3 py-2 rounded-lg <?= $managedIsAdmin ? 'bg-amber-700 hover:bg-amber-600 text-amber-100' : 'bg-emerald-700 hover:bg-emerald-600 text-emerald-100' ?>" onclick="confirmAdminUserRoleAction(<?= (int)$managedUser->id ?>)"><?= $managedIsAdmin ? 'Demote' : 'Promote' ?></button>
                                         <button type="button" class="w-full text-left bg-indigo-700 hover:bg-indigo-600 text-indigo-100 text-sm px-3 py-2 rounded-lg" onclick="openUserRolesModal(<?= (int)$managedUser->id ?>, '<?= htmlspecialchars($managedUser->username, ENT_QUOTES, 'UTF-8') ?>')">Manage Roles</button>
+                                        <button type="button" class="w-full text-left bg-amber-600 hover:bg-amber-500 text-white text-sm px-3 py-2 rounded-lg" onclick="openUserTempAccessModal(<?= (int)$managedUser->id ?>, '<?= htmlspecialchars($managedUser->username, ENT_QUOTES, 'UTF-8') ?>')">Temp Access</button>
                                         <button type="button" id="admin-user-ban-action-<?= (int)$managedUser->id ?>" class="w-full text-left bg-amber-700 hover:bg-amber-600 text-amber-100 text-sm px-3 py-2 rounded-lg" onclick="confirmAdminUserBanAction(<?= (int)$managedUser->id ?>)"><?= $managedIsBanned ? 'Unban' : 'Ban' ?></button>
                                         <button type="button" class="w-full text-left bg-red-700 hover:bg-red-600 text-red-100 text-sm px-3 py-2 rounded-lg" onclick="deleteAdminUser(<?= (int)$managedUser->id ?>)">Delete user</button>
                                     </div>
@@ -202,4 +203,84 @@ async function toggleUserRole(userId, roleId, hasRole, btn) {
 }
 
 document.addEventListener('DOMContentLoaded', loadUserRoleBadges);
+
+function formatTempExpiry(expiresAt) {
+    if (!expiresAt) return 'Unlimited';
+    const exp = new Date(expiresAt + ' UTC');
+    const now = new Date();
+    const diffMs = exp - now;
+    if (diffMs <= 0) return 'Expired';
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 60) return diffMin + 'min left';
+    const diffH = Math.floor(diffMin / 60);
+    if (diffH < 24) return diffH + 'h ' + (diffMin % 60) + 'min left';
+    const diffD = Math.floor(diffH / 24);
+    return diffD + 'd ' + (diffH % 24) + 'h left';
+}
+
+async function openUserTempAccessModal(userId, username) {
+    // Close actions menu
+    const menu = document.getElementById('admin-user-menu-' + userId);
+    if (menu) menu.classList.add('hidden');
+
+    document.getElementById('user-temp-access-modal-user-id').value = userId;
+    document.getElementById('user-temp-access-modal-username').textContent = username;
+    document.getElementById('user-temp-access-modal').classList.remove('hidden');
+
+    const res = await fetch('/api/roles/temp-access/user?user_id=' + userId);
+    const data = await res.json();
+    const items = data.temp_access || [];
+    const list = document.getElementById('user-temp-access-modal-list');
+
+    if (items.length === 0) {
+        list.innerHTML = '<p class="text-zinc-400 text-sm">No active temp access entries.</p>';
+        return;
+    }
+
+    list.innerHTML = items.map(item => {
+        const expiresLabel = formatTempExpiry(item.expires_at);
+        const chatLabel = item.chat_title || ('Chat #' + (item.chat_number || item.chat_id));
+        const isExpired = expiresLabel === 'Expired';
+        return `<div class="flex items-center justify-between bg-zinc-800 rounded-lg px-3 py-2">
+            <div class="min-w-0">
+                <span class="text-sm font-medium">${chatLabel}</span>
+                <span class="text-xs ${isExpired ? 'text-red-400' : 'text-zinc-400'} ml-2">${expiresLabel}</span>
+            </div>
+            <button type="button" onclick="revokeUserTempAccess(${item.chat_id}, ${userId})" class="text-sm px-3 py-1 rounded-lg bg-red-700 hover:bg-red-600 text-red-100 shrink-0">Revoke</button>
+        </div>`;
+    }).join('');
+}
+
+function closeUserTempAccessModal() {
+    document.getElementById('user-temp-access-modal').classList.add('hidden');
+}
+
+async function revokeUserTempAccess(chatId, userId) {
+    const fd = new FormData();
+    fd.append('csrf_token', window.CSRF_TOKEN);
+    fd.append('chat_id', chatId);
+    fd.append('user_id', userId);
+
+    const res = await fetch('/admin/roles/temp-access/revoke', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (data.error) return alert(data.error);
+
+    const username = document.getElementById('user-temp-access-modal-username').textContent;
+    openUserTempAccessModal(userId, username);
+}
 </script>
+
+<!-- User Temp Access Modal -->
+<div id="user-temp-access-modal" class="hidden fixed inset-0 bg-black/70 z-50 p-4 md:p-6" aria-hidden="true">
+    <div class="h-full w-full flex items-center justify-center">
+        <div class="w-full max-w-md bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-6" role="dialog">
+            <h2 class="text-lg font-semibold text-zinc-100 mb-1">Temporary Chat Access</h2>
+            <p id="user-temp-access-modal-username" class="text-sm text-zinc-400 mb-4"></p>
+            <input type="hidden" id="user-temp-access-modal-user-id">
+            <div id="user-temp-access-modal-list" class="space-y-2 max-h-64 overflow-y-auto"></div>
+            <div class="mt-5 flex items-center justify-end">
+                <button type="button" onclick="closeUserTempAccessModal()" class="px-4 py-2 rounded-xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-zinc-200">Close</button>
+            </div>
+        </div>
+    </div>
+</div>

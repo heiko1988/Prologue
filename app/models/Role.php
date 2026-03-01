@@ -173,6 +173,20 @@ class Role extends Model {
         )->fetchAll();
     }
 
+    public static function getTempAccessListByUser($userId) {
+        return self::query(
+            "SELECT cta.*, c.chat_number, c.type,
+                    COALESCE(c.title, '') AS chat_title,
+                    gb.username AS granted_by_username
+             FROM chat_temp_access cta
+             JOIN chats c ON c.id = cta.chat_id
+             LEFT JOIN users gb ON gb.id = cta.granted_by
+             WHERE cta.user_id = ?
+             ORDER BY cta.created_at DESC",
+            [(int)$userId]
+        )->fetchAll();
+    }
+
     public static function supportsRoles(): bool {
         static $supports = null;
         if ($supports !== null) {
