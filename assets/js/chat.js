@@ -1454,9 +1454,10 @@ async function loadSidebarChats() {
 
     const isAdmin = (window.CURRENT_USER_ROLE || '') === 'admin';
 
-    // Load saved custom order from localStorage
-    const savedPrivateOrder = JSON.parse(localStorage.getItem('prologue.chatOrder.private') || '[]');
-    const savedGroupOrder = JSON.parse(localStorage.getItem('prologue.chatOrder.group') || '[]');
+    // Load admin-defined chat order from server
+    const chatOrder = data.chat_order || {};
+    const savedPrivateOrder = (chatOrder.private || []).map(String);
+    const savedGroupOrder = (chatOrder.group || []).map(String);
 
     // Sort chats by saved order; new chats (not in saved order) appear at end
     const sortByOrder = (items, order) => {
@@ -1561,8 +1562,8 @@ async function loadSidebarChats() {
         : [makeEmptyState('No group chats yet')]));
 
     if (isAdmin) {
-        initChatDragAndDrop(privateList, 'prologue.chatOrder.private');
-        initChatDragAndDrop(groupList, 'prologue.chatOrder.group');
+        initChatDragAndDrop(privateList, 'private');
+        initChatDragAndDrop(groupList, 'group');
     }
 }
 
@@ -1637,10 +1638,15 @@ function initChatDragAndDrop(list, storageKey) {
             list.insertBefore(dragSrc, target.nextSibling);
         }
 
-        // Persist new order to localStorage
+        // Persist new order to server (admin-only)
         const order = Array.from(list.querySelectorAll('a[data-chat-number]'))
             .map(el => el.dataset.chatNumber);
-        localStorage.setItem(storageKey, JSON.stringify(order));
+        const listType = storageKey === 'private' ? 'private' : 'group';
+        fetch('/api/chats/reorder', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: listType, order: order, csrf_token: window.CSRF_TOKEN })
+        }).catch(() => {});
     });
 }
 

@@ -245,6 +245,7 @@ $router->post('/api/chats/group/take-ownership', 'ChatController@takeGroupOwners
 $router->post('/api/chats/group/leave', 'ChatController@leaveGroup');
 $router->post('/api/chats/group/delete', 'ChatController@deleteGroup');
 $router->post('/api/chats/rename', 'ChatController@renameChat');
+$router->post('/api/chats/reorder', 'ApiController@reorderChats');
 $router->post('/api/status', 'ApiController@updateStatus');
 
 // Calls

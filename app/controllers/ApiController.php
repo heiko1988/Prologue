@@ -477,7 +477,15 @@ class ApiController extends Controller {
             }
         }
 
-        $this->json(['chats' => $chats]);
+        // Load admin-defined chat order from settings
+        $privateOrderRaw = Database::query("SELECT `value` FROM settings WHERE `key` = 'chat_order_private'")->fetchColumn();
+        $groupOrderRaw = Database::query("SELECT `value` FROM settings WHERE `key` = 'chat_order_group'")->fetchColumn();
+        $chatOrder = [
+            'private' => $privateOrderRaw ? json_decode($privateOrderRaw, true) : [],
+            'group' => $groupOrderRaw ? json_decode($groupOrderRaw, true) : [],
+        ];
+
+        $this->json(['chats' => $chats, 'chat_order' => $chatOrder]);
     }
 
     public function getMessages($params) {
@@ -955,5 +963,41 @@ class ApiController extends Controller {
             'effective_status_text_class' => $user->effective_status_text_class,
             'effective_status_dot_class' => $user->effective_status_dot_class
         ]);
+    }
+
+    public function reorderChats() {
+        Auth::requireAuth();
+        $user = Auth::user();
+        if (strtolower((string)($user->role ?? '')) !== 'admin') {
+            $this->json(['error' => 'Admin access required'], 403);
+            return;
+        }
+
+        $input = json_decode(file_get_contents('php://input'), true);
+        $listType = trim((string)($input['type'] ?? ''));
+        $order = $input['order'] ?? [];
+
+        if (!in_array($listType, ['private', 'group'], true) || !is_array($order)) {
+            $this->json(['error' => 'Invalid parameters'], 400);
+            return;
+        }
+
+        // Sanitize: only keep numeric chat numbers
+        $sanitized = array_values(array_filter(array_map('strval', $order), function($v) {
+            return preg_match('/^\d+$/', $v);
+        }));
+
+        $key = 'chat_order_' . $listType;
+        $value = json_encode($sanitized);
+
+        // Upsert into settings table
+        $existing = Database::query("SELECT `key` FROM settings WHERE `key` = ?", [$key])->fetch();
+        if ($existing) {
+            Database::query("UPDATE settings SET `value` = ? WHERE `key` = ?", [$value, $key]);
+        } else {
+            Database::query("INSERT INTO settings (`key`, `value`) VALUES (?, ?)", [$key, $value]);
+        }
+
+        $this->json(['success' => true]);
     }
 }
