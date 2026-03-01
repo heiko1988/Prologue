@@ -49,6 +49,8 @@ class Role extends Model {
             "INSERT IGNORE INTO user_roles (user_id, role_id) VALUES (?, ?)",
             [(int)$userId, (int)$roleId]
         );
+        // Auto-add user to all group chats that require this role
+        self::syncUserToChatsForRole((int)$userId, (int)$roleId);
     }
 
     public static function removeFromUser($userId, $roleId) {
@@ -56,6 +58,58 @@ class Role extends Model {
             "DELETE FROM user_roles WHERE user_id = ? AND role_id = ?",
             [(int)$userId, (int)$roleId]
         );
+        // Remove user from chats they no longer have role access to
+        self::removeUserFromChatsForRole((int)$userId, (int)$roleId);
+    }
+
+    public static function syncUserToChatsForRole(int $userId, int $roleId): void {
+        $chats = self::query(
+            "SELECT id FROM chats WHERE required_role_id = ? AND type = 'group'",
+            [$roleId]
+        )->fetchAll();
+        foreach ($chats as $chat) {
+            self::query(
+                "INSERT IGNORE INTO chat_members (chat_id, user_id) VALUES (?, ?)",
+                [(int)$chat->id, $userId]
+            );
+        }
+    }
+
+    public static function syncAllUsersToChat(int $chatId, int $roleId): void {
+        $users = self::query(
+            "SELECT user_id FROM user_roles WHERE role_id = ?",
+            [$roleId]
+        )->fetchAll();
+        foreach ($users as $row) {
+            self::query(
+                "INSERT IGNORE INTO chat_members (chat_id, user_id) VALUES (?, ?)",
+                [$chatId, (int)$row->user_id]
+            );
+        }
+    }
+
+    public static function removeUserFromChatsForRole(int $userId, int $roleId): void {
+        $chats = self::query(
+            "SELECT id FROM chats WHERE required_role_id = ? AND type = 'group'",
+            [$roleId]
+        )->fetchAll();
+        foreach ($chats as $chat) {
+            // Don't remove if user has temp access or is chat owner
+            if (self::hasTempAccess((int)$chat->id, $userId)) {
+                continue;
+            }
+            $isOwner = (int)self::query(
+                "SELECT COUNT(*) FROM chats WHERE id = ? AND created_by = ?",
+                [(int)$chat->id, $userId]
+            )->fetchColumn();
+            if ($isOwner > 0) {
+                continue;
+            }
+            self::query(
+                "DELETE FROM chat_members WHERE chat_id = ? AND user_id = ?",
+                [(int)$chat->id, $userId]
+            );
+        }
     }
 
     public static function userHasRole($userId, $roleId) {
@@ -71,6 +125,8 @@ class Role extends Model {
             self::query("UPDATE chats SET required_role_id = NULL WHERE id = ?", [(int)$chatId]);
         } else {
             self::query("UPDATE chats SET required_role_id = ? WHERE id = ?", [(int)$roleId, (int)$chatId]);
+            // Auto-add all users with this role to the chat
+            self::syncAllUsersToChat((int)$chatId, (int)$roleId);
         }
     }
 
