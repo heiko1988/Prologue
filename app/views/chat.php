@@ -491,7 +491,7 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
         <?php endforeach; ?>
     </div>
     <div id="typing-indicator" class="px-6 pb-2 text-sm text-zinc-400 min-h-6 hidden" aria-live="polite"></div>
-    <form id="message-form" class="p-6 border-t border-zinc-800 flex gap-4 relative">
+    <form id="message-form" class="p-2 sm:p-6 border-t border-zinc-800 flex gap-2 sm:gap-4 relative">
         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
         <input type="hidden" id="quoted-message-id" value="">
         <div id="quote-preview" class="hidden absolute left-6 right-6 bottom-[calc(100%+0.75rem)] bg-zinc-900 border border-zinc-700 rounded-2xl p-3 z-20">
@@ -505,17 +505,17 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                 </button>
             </div>
         </div>
-        <div id="message-composer-controls" class="w-full flex flex-wrap sm:flex-nowrap items-stretch gap-3 sm:gap-4 <?= $canSendMessages ? '' : 'hidden' ?>">
+        <div id="message-composer-controls" class="w-full flex flex-nowrap items-stretch gap-1.5 sm:gap-4 <?= $canSendMessages ? '' : 'hidden' ?>">
             <?php if ($attachmentsEnabled): ?>
-            <button type="button" id="attachments-toggle" class="order-2 sm:order-1 w-[calc(50%-0.375rem)] sm:w-14 rounded-3xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 min-h-12" aria-label="Open attachments menu" aria-expanded="false" aria-controls="attachments-drawer">
+            <button type="button" id="attachments-toggle" class="order-3 sm:order-1 w-10 sm:w-14 flex-shrink-0 rounded-3xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 min-h-10 sm:min-h-12 flex items-center justify-center" aria-label="Open attachments menu" aria-expanded="false" aria-controls="attachments-drawer">
                 <i class="fa-solid fa-paperclip"></i>
             </button>
             <?php endif; ?>
-            <button type="button" id="emoji-toggle" class="hidden lg:block order-3 sm:order-2 w-14 rounded-3xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700" aria-label="Open emoji picker" aria-expanded="false" aria-controls="emoji-drawer">
+            <button type="button" id="emoji-toggle" class="order-1 sm:order-2 w-10 sm:w-14 flex-shrink-0 rounded-3xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 flex items-center justify-center" aria-label="Open emoji picker" aria-expanded="false" aria-controls="emoji-drawer">
                 <i class="fa-regular fa-face-smile"></i>
             </button>
-            <input type="text" id="message-input" maxlength="16384" class="order-1 sm:order-3 w-full sm:flex-1 bg-zinc-800 border border-zinc-700 rounded-3xl px-6 py-4" placeholder="Message..." required>
-            <button type="submit" class="order-2 sm:order-4 w-[calc(50%-0.375rem)] sm:w-auto bg-emerald-600 px-10 rounded-3xl min-h-12">Send</button>
+            <input type="text" id="message-input" maxlength="16384" class="order-2 sm:order-3 flex-1 min-w-0 bg-zinc-800 border border-zinc-700 rounded-3xl px-4 py-3 sm:px-6 sm:py-4 text-[16px] sm:text-sm" placeholder="Message..." required>
+            <button type="submit" class="order-4 sm:order-4 w-10 sm:w-auto flex-shrink-0 bg-emerald-600 sm:px-10 rounded-3xl min-h-10 sm:min-h-12 flex items-center justify-center"><span class="hidden sm:inline">Send</span><i class="fa-solid fa-paper-plane sm:hidden text-sm"></i></button>
         </div>
         <div id="message-disabled-notice" class="w-full bg-zinc-900 border border-zinc-700 rounded-2xl px-4 py-3 text-sm text-amber-300 <?= $canSendMessages ? 'hidden' : '' ?>"><?= htmlspecialchars($messageDisabledNoticeText, ENT_QUOTES, 'UTF-8') ?></div>
         <div id="emoji-drawer" class="hidden absolute left-6 bottom-[calc(100%+0.75rem)] w-[32rem] max-w-[calc(100%-3rem)] bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-4 z-30">

@@ -56,53 +56,7 @@
         }
         /* ===== Mobile phone optimizations (< 640px) ===== */
         @media (max-width: 639px) {
-            /* Compact message form */
-            #message-form {
-                padding: 0.5rem 0.75rem !important;
-                gap: 0 !important;
-            }
-            /* Input row: always single line */
-            #message-composer-controls {
-                flex-wrap: nowrap !important;
-                gap: 0.5rem !important;
-            }
-            #message-composer-controls > * {
-                order: unset !important;
-            }
-            /* Attachment button: small square icon */
-            #attachments-toggle {
-                width: 3rem !important;
-                min-height: 2.75rem !important;
-                flex-shrink: 0;
-                order: 1 !important;
-            }
-            /* Message input: fill remaining space */
-            #message-input {
-                flex: 1 1 0% !important;
-                width: 0 !important;
-                min-width: 0 !important;
-                padding: 0.625rem 1rem !important;
-                min-height: 2.75rem !important;
-                font-size: 16px !important; /* prevents iOS zoom */
-                order: 2 !important;
-            }
-            /* Send button: compact */
-            #message-form button[type="submit"] {
-                width: auto !important;
-                min-width: 3rem !important;
-                padding-left: 1rem !important;
-                padding-right: 1rem !important;
-                min-height: 2.75rem !important;
-                font-size: 0;
-                order: 3 !important;
-            }
-            #message-form button[type="submit"]::after {
-                content: "\f1d8";
-                font-family: "Font Awesome 6 Free";
-                font-weight: 900;
-                font-size: 1rem;
-            }
-            /* Chat header: less padding */
+            /* Chat header: compact */
             #chat-view > .border-b:first-child {
                 padding-left: 0.75rem !important;
                 padding-right: 0.75rem !important;
@@ -120,10 +74,6 @@
                 padding-left: 0.75rem !important;
                 padding-right: 0.75rem !important;
             }
-            #messages-container > div {
-                padding-left: 0 !important;
-                padding-right: 0 !important;
-            }
             /* Typing indicator */
             #typing-indicator {
                 padding-left: 0.75rem !important;
@@ -131,13 +81,19 @@
             }
             /* Quote preview: match reduced padding */
             #quote-preview {
-                left: 0.75rem !important;
-                right: 0.75rem !important;
+                left: 0.5rem !important;
+                right: 0.5rem !important;
             }
             /* Drawers: match reduced padding */
-            #emoji-drawer, #attachments-drawer {
-                left: 0.75rem !important;
-                right: 0.75rem !important;
+            #emoji-drawer {
+                left: 0.5rem !important;
+                right: unset !important;
+                width: calc(100vw - 1rem) !important;
+                max-width: none !important;
+            }
+            #attachments-drawer {
+                left: 0.5rem !important;
+                right: 0.5rem !important;
             }
             /* Message action buttons: bigger tap targets */
             .js-quote-link,
@@ -152,12 +108,6 @@
             /* Pinned message: compact */
             #pinned-message-container {
                 padding: 0.375rem 0.75rem !important;
-            }
-            /* Long-press context hint via touch-action */
-            .group.flex.items-start {
-                -webkit-touch-callout: none;
-                -webkit-user-select: none;
-                user-select: none;
             }
         }
     </style>
