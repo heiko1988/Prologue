@@ -439,6 +439,12 @@ class ChatController extends Controller {
             $this->json(['error' => 'Access denied'], 403);
         }
 
+        // Role-based access check for sending messages
+        $chatForAccess = Database::query("SELECT * FROM chats WHERE id = ?", [$chatId])->fetch();
+        if ($chatForAccess && !Auth::canAccessChat(Auth::user(), $chatForAccess)) {
+            $this->json(['error' => 'Access denied'], 403);
+        }
+
         $chatSelect = $this->supportsChatSoftDelete()
             ? "SELECT chat_number, deleted_at FROM chats WHERE id = ?"
             : "SELECT chat_number FROM chats WHERE id = ?";

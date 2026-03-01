@@ -184,9 +184,13 @@ class CallController extends Controller {
             $this->json(['error' => 'Invalid chat'], 400);
         }
 
-        $chat = Database::query("SELECT id, chat_number FROM chats WHERE id = ?", [$chatId])->fetch();
+        $chat = Database::query("SELECT * FROM chats WHERE id = ?", [$chatId])->fetch();
         if (!$chat) {
             $this->json(['error' => 'Chat not found'], 404);
+        }
+
+        if (!Auth::canAccessChat(Auth::user(), $chat)) {
+            $this->json(['error' => 'Access denied'], 403);
         }
 
         $member = Database::query("SELECT id FROM chat_members WHERE chat_id = ? AND user_id = ?", [$chatId, $userId])->fetch();
@@ -237,6 +241,11 @@ class CallController extends Controller {
         $call = Database::query("SELECT id, chat_id FROM calls WHERE id = ? AND status = 'active'", [$callId])->fetch();
         if (!$call) {
             $this->json(['error' => 'Call not found'], 404);
+        }
+
+        $chatForAccess = Database::query("SELECT * FROM chats WHERE id = ?", [(int)$call->chat_id])->fetch();
+        if ($chatForAccess && !Auth::canAccessChat(Auth::user(), $chatForAccess)) {
+            $this->json(['error' => 'Access denied'], 403);
         }
 
         $member = Database::query("SELECT id FROM chat_members WHERE chat_id = ? AND user_id = ?", [$call->chat_id, $userId])->fetch();

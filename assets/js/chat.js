@@ -2367,6 +2367,10 @@ function bindRenameChatModal() {
 async function pollMessages(options = {}) {
     if (!currentChat) return;
     const res = await fetch(`/api/messages/${currentChat.id}`);
+    if (res.status === 403) {
+        window.location.href = '/';
+        return;
+    }
     const data = await res.json();
     const messages = data.messages || [];
     const typingUsers = data.typing_users || [];
