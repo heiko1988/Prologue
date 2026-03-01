@@ -1,0 +1,348 @@
+<?php
+class Post extends Model {
+    public const MAX_CONTENT_LENGTH = 500;
+    public const OWNER_DELETE_WINDOW_SECONDS = 3600;
+    public const REACTION_CODES = [
+        '1F44D',
+        '1F44E',
+        '2665',
+        '1F923',
+        '1F622',
+        '1F436',
+        '1F4A9'
+    ];
+
+    public static function normalizeReactionCode($value): string {
+        $code = strtoupper(trim((string)$value));
+        $code = preg_replace('/[^0-9A-F]/', '', $code) ?? '';
+        if ($code === '') {
+            return '';
+        }
+
+        return in_array($code, self::REACTION_CODES, true) ? $code : '';
+    }
+
+    public static function normalizeContent($value): string {
+        return trim((string)$value);
+    }
+
+    public static function isContentValid($content): bool {
+        $normalized = self::normalizeContent($content);
+        if ($normalized === '') {
+            return false;
+        }
+
+        return mb_strlen($normalized, 'UTF-8') <= self::MAX_CONTENT_LENGTH;
+    }
+
+    public static function create(int $userId, string $content): ?object {
+        $normalized = self::normalizeContent($content);
+        if (!self::isContentValid($normalized)) {
+            return null;
+        }
+
+        Database::query(
+            "INSERT INTO posts (user_id, content) VALUES (?, ?)",
+            [$userId, $normalized]
+        );
+
+        $postId = (int)Database::getInstance()->lastInsertId();
+        if ($postId <= 0) {
+            return null;
+        }
+
+        return Database::query(
+            "SELECT id, user_id, content, created_at FROM posts WHERE id = ? LIMIT 1",
+            [$postId]
+        )->fetch() ?: null;
+    }
+
+    public static function findById(int $postId): ?object {
+        if ($postId <= 0) {
+            return null;
+        }
+
+        return Database::query(
+            "SELECT id, user_id, content, created_at FROM posts WHERE id = ? LIMIT 1",
+            [$postId]
+        )->fetch() ?: null;
+    }
+
+    public static function canUserDeletePost(object $user, object $post): bool {
+        $currentUserId = (int)($user->id ?? 0);
+        if ($currentUserId <= 0) {
+            return false;
+        }
+
+        $isCurrentUserAdmin = strtolower((string)($user->role ?? '')) === 'admin';
+        if ($isCurrentUserAdmin) {
+            return true;
+        }
+
+        $postOwnerId = (int)($post->user_id ?? 0);
+        if ($postOwnerId <= 0 || $postOwnerId !== $currentUserId) {
+            return false;
+        }
+
+        $postCreatedAtRaw = trim((string)($post->created_at ?? ''));
+        $postCreatedAtTs = $postCreatedAtRaw !== '' ? strtotime($postCreatedAtRaw) : false;
+        if ($postCreatedAtTs === false) {
+            return false;
+        }
+
+        $postAgeInSeconds = time() - (int)$postCreatedAtTs;
+        if ($postAgeInSeconds > self::OWNER_DELETE_WINDOW_SECONDS) {
+            return false;
+        }
+
+        if (property_exists($post, 'has_reaction_from_other_users') && !empty($post->has_reaction_from_other_users)) {
+            return false;
+        }
+
+        $postId = (int)($post->id ?? 0);
+        if ($postId <= 0) {
+            return false;
+        }
+
+        $otherReaction = Database::query(
+            "SELECT id FROM post_reactions WHERE post_id = ? AND user_id <> ? LIMIT 1",
+            [$postId, $postOwnerId]
+        )->fetch();
+
+        return !$otherReaction;
+    }
+
+    public static function deleteById(int $postId): bool {
+        if ($postId <= 0) {
+            return false;
+        }
+
+        Database::query("DELETE FROM posts WHERE id = ? LIMIT 1", [$postId]);
+        return true;
+    }
+
+    public static function countByUserId(int $profileUserId): int {
+        if ($profileUserId <= 0) {
+            return 0;
+        }
+
+        return (int)Database::query(
+            "SELECT COUNT(*) FROM posts WHERE user_id = ?",
+            [$profileUserId]
+        )->fetchColumn();
+    }
+
+    public static function getByUserId(int $profileUserId, int $currentUserId, int $limit = 30, int $offset = 0): array {
+        if ($profileUserId <= 0) {
+            return [];
+        }
+
+        $safeLimit = max(1, min(100, $limit));
+        $safeOffset = max(0, $offset);
+        $rows = Database::query(
+            "SELECT p.id, p.user_id, p.content, p.created_at
+             FROM posts p
+             WHERE p.user_id = ?
+             ORDER BY p.created_at DESC, p.id DESC
+             LIMIT $safeLimit OFFSET $safeOffset",
+            [$profileUserId]
+        )->fetchAll();
+
+        $posts = is_array($rows) ? $rows : [];
+        self::attachReactions($posts, $currentUserId);
+
+        return $posts;
+    }
+
+    public static function attachReactions(array &$posts, int $currentUserId): void {
+        if (count($posts) === 0) {
+            return;
+        }
+
+        $postIds = [];
+        $postOwnerById = [];
+        $hasReactionFromOtherUsersByPost = [];
+        foreach ($posts as $post) {
+            $postId = (int)($post->id ?? 0);
+            if ($postId <= 0) {
+                continue;
+            }
+            $postOwnerById[$postId] = (int)($post->user_id ?? 0);
+            $postIds[$postId] = true;
+            $post->reactions = [];
+            $post->has_reaction_from_other_users = false;
+        }
+
+        if (count($postIds) === 0) {
+            return;
+        }
+
+        $placeholders = implode(',', array_fill(0, count($postIds), '?'));
+        $rows = Database::query(
+            "SELECT pr.post_id, pr.reaction_code, pr.user_id, u.username
+             FROM post_reactions pr
+             JOIN users u ON u.id = pr.user_id
+             WHERE pr.post_id IN ($placeholders)
+             ORDER BY pr.id ASC",
+            array_keys($postIds)
+        )->fetchAll();
+
+        $aggregatedByPost = [];
+        foreach ($rows as $row) {
+            $postId = (int)($row->post_id ?? 0);
+            $reactionCode = self::normalizeReactionCode($row->reaction_code ?? '');
+            $reactionUserId = (int)($row->user_id ?? 0);
+            $username = User::normalizeUsername($row->username ?? '');
+
+            if ($postId <= 0 || $reactionCode === '' || $reactionUserId <= 0 || $username === '') {
+                continue;
+            }
+
+            if (!isset($aggregatedByPost[$postId])) {
+                $aggregatedByPost[$postId] = [];
+            }
+            if (!isset($aggregatedByPost[$postId][$reactionCode])) {
+                $aggregatedByPost[$postId][$reactionCode] = [
+                    'reaction_code' => $reactionCode,
+                    'count' => 0,
+                    'users' => [],
+                    'reacted_by_current_user' => false
+                ];
+            }
+
+            $aggregatedByPost[$postId][$reactionCode]['count'] += 1;
+            $aggregatedByPost[$postId][$reactionCode]['users'][] = $username;
+            if ($reactionUserId === $currentUserId) {
+                $aggregatedByPost[$postId][$reactionCode]['reacted_by_current_user'] = true;
+            }
+
+            $postOwnerId = (int)($postOwnerById[$postId] ?? 0);
+            if ($postOwnerId > 0 && $reactionUserId !== $postOwnerId) {
+                $hasReactionFromOtherUsersByPost[$postId] = true;
+            }
+        }
+
+        foreach ($posts as $post) {
+            $postId = (int)($post->id ?? 0);
+            if (!isset($aggregatedByPost[$postId])) {
+                $post->reactions = [];
+                continue;
+            }
+
+            $reactionRows = [];
+            foreach (self::REACTION_CODES as $code) {
+                if (!isset($aggregatedByPost[$postId][$code])) {
+                    continue;
+                }
+                $entry = $aggregatedByPost[$postId][$code];
+                $reactionRows[] = (object)[
+                    'reaction_code' => (string)$entry['reaction_code'],
+                    'count' => (int)$entry['count'],
+                    'users' => array_values($entry['users']),
+                    'reacted_by_current_user' => (bool)$entry['reacted_by_current_user']
+                ];
+            }
+
+            $post->reactions = $reactionRows;
+            $post->has_reaction_from_other_users = !empty($hasReactionFromOtherUsersByPost[$postId]);
+        }
+    }
+
+    public static function areUsersFriends(int $firstUserId, int $secondUserId): bool {
+        if ($firstUserId <= 0 || $secondUserId <= 0 || $firstUserId === $secondUserId) {
+            return false;
+        }
+
+        $friendship = Database::query(
+            "SELECT id
+             FROM friends
+             WHERE status = 'accepted'
+               AND ((user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?))
+             LIMIT 1",
+            [$firstUserId, $secondUserId, $secondUserId, $firstUserId]
+        )->fetch();
+
+        return (bool)$friendship;
+    }
+
+    public static function canUserReactToPost(int $viewerUserId, int $postOwnerUserId): bool {
+        if ($viewerUserId > 0 && $viewerUserId === $postOwnerUserId) {
+            return true;
+        }
+
+        return self::areUsersFriends($viewerUserId, $postOwnerUserId);
+    }
+
+    public static function countFriendsFeed(int $userId): int {
+        if ($userId <= 0) {
+            return 0;
+        }
+
+        return (int)Database::query(
+            "SELECT COUNT(*)
+             FROM posts p
+             WHERE p.user_id = ?
+                OR p.user_id IN (
+                    SELECT CASE WHEN f.user_id = ? THEN f.friend_id ELSE f.user_id END
+                    FROM friends f
+                    WHERE (f.user_id = ? OR f.friend_id = ?) AND f.status = 'accepted'
+                )",
+            [$userId, $userId, $userId, $userId]
+        )->fetchColumn();
+    }
+
+    public static function getFriendsFeed(int $userId, int $limit = 30, int $offset = 0): array {
+        if ($userId <= 0) {
+            return [];
+        }
+
+        $safeLimit = max(1, min(100, $limit));
+        $safeOffset = max(0, $offset);
+        $rows = Database::query(
+            "SELECT p.id, p.user_id, p.content, p.created_at,
+                    u.username, u.user_number, u.avatar_filename
+             FROM posts p
+             JOIN users u ON u.id = p.user_id
+             WHERE p.user_id = ?
+                OR p.user_id IN (
+                    SELECT CASE WHEN f.user_id = ? THEN f.friend_id ELSE f.user_id END
+                    FROM friends f
+                    WHERE (f.user_id = ? OR f.friend_id = ?) AND f.status = 'accepted'
+                )
+             ORDER BY p.created_at DESC, p.id DESC
+             LIMIT $safeLimit OFFSET $safeOffset",
+            [$userId, $userId, $userId, $userId]
+        )->fetchAll();
+
+        $posts = is_array($rows) ? $rows : [];
+        self::attachReactions($posts, $userId);
+
+        return $posts;
+    }
+
+    public static function countServerFeed(): int {
+        return (int)Database::query("SELECT COUNT(*) FROM posts")->fetchColumn();
+    }
+
+    public static function getServerFeed(int $userId, int $limit = 30, int $offset = 0): array {
+        if ($userId <= 0) {
+            return [];
+        }
+
+        $safeLimit = max(1, min(100, $limit));
+        $safeOffset = max(0, $offset);
+        $rows = Database::query(
+            "SELECT p.id, p.user_id, p.content, p.created_at,
+                    u.username, u.user_number, u.avatar_filename
+             FROM posts p
+             JOIN users u ON u.id = p.user_id
+             ORDER BY p.created_at DESC, p.id DESC
+             LIMIT $safeLimit OFFSET $safeOffset"
+        )->fetchAll();
+
+        $posts = is_array($rows) ? $rows : [];
+        self::attachReactions($posts, $userId);
+
+        return $posts;
+    }
+}
