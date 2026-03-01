@@ -698,9 +698,11 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
             <div class="border-b border-zinc-700 pb-4 mb-4">
                 <h3 class="text-sm font-semibold text-zinc-400 uppercase tracking-wide mb-3">Grant Access</h3>
                 <div class="flex flex-wrap items-end gap-3">
-                    <div class="flex-1 min-w-[160px]">
+                    <div class="flex-1 min-w-[160px] relative">
                         <label class="text-xs text-zinc-400 block mb-1">Username</label>
-                        <input type="text" id="temp-access-username" placeholder="Username" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm">
+                        <input type="text" id="temp-access-username" placeholder="Start typing..." autocomplete="off" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm">
+                        <input type="hidden" id="temp-access-user-id">
+                        <div id="temp-access-autocomplete" class="hidden absolute z-30 mt-1 w-full bg-zinc-900 border border-zinc-700 rounded-xl overflow-hidden max-h-40 overflow-y-auto"></div>
                     </div>
                     <div>
                         <label class="text-xs text-zinc-400 block mb-1">Duration</label>
@@ -772,6 +774,20 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
         loadTempAccessList();
     });
 
+    function formatExpiresAt(expiresAt) {
+        if (!expiresAt) return 'Unlimited';
+        const exp = new Date(expiresAt + ' UTC');
+        const now = new Date();
+        const diffMs = exp - now;
+        if (diffMs <= 0) return 'Expired';
+        const diffMin = Math.floor(diffMs / 60000);
+        if (diffMin < 60) return diffMin + 'min left';
+        const diffH = Math.floor(diffMin / 60);
+        if (diffH < 24) return diffH + 'h ' + (diffMin % 60) + 'min left';
+        const diffD = Math.floor(diffH / 24);
+        return diffD + 'd ' + (diffH % 24) + 'h left';
+    }
+
     async function loadTempAccessList() {
         const res = await fetch('/api/roles/temp-access?chat_id=' + chatId);
         const data = await res.json();
@@ -784,42 +800,89 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
         }
 
         list.innerHTML = items.map(item => {
-            const expires = item.expires_at ? item.expires_at : 'Never';
+            const expiresLabel = formatExpiresAt(item.expires_at);
+            const isExpired = expiresLabel === 'Expired';
             return `<div class="flex items-center justify-between bg-zinc-800 rounded-lg px-3 py-2">
                 <div>
                     <span class="text-sm font-medium">${item.username}</span>
-                    <span class="text-xs text-zinc-400 ml-2">expires: ${expires}</span>
+                    <span class="text-xs ${isExpired ? 'text-red-400' : 'text-zinc-400'} ml-2">${expiresLabel}</span>
                 </div>
                 <button type="button" onclick="revokeTempAccess(${item.user_id})" class="text-sm px-3 py-1 rounded-lg bg-red-700 hover:bg-red-600 text-red-100">Revoke</button>
             </div>`;
         }).join('');
     }
 
+    // Autocomplete for temp access username
+    let _acTimer = null;
+    const acInput = document.getElementById('temp-access-username');
+    const acDropdown = document.getElementById('temp-access-autocomplete');
+    const acUserIdField = document.getElementById('temp-access-user-id');
+
+    acInput?.addEventListener('input', function() {
+        clearTimeout(_acTimer);
+        const q = this.value.trim();
+        acUserIdField.value = '';
+        if (q.length < 1) { acDropdown.classList.add('hidden'); return; }
+        _acTimer = setTimeout(async () => {
+            const res = await fetch('/api/users/search?q=' + encodeURIComponent(q));
+            const data = await res.json();
+            const users = data.users || [];
+            if (users.length === 0) {
+                acDropdown.innerHTML = '<div class="px-3 py-2 text-sm text-zinc-500">No users found</div>';
+                acDropdown.classList.remove('hidden');
+                return;
+            }
+            acDropdown.innerHTML = users.slice(0, 8).map(u =>
+                `<button type="button" class="w-full text-left px-3 py-2 text-sm hover:bg-zinc-800 flex items-center gap-2" data-user-id="${u.id}" data-username="${u.username}">
+                    <span class="font-medium">${u.username}</span>
+                    <span class="text-xs text-zinc-500">#${u.user_number_formatted || u.user_number || ''}</span>
+                </button>`
+            ).join('');
+            acDropdown.classList.remove('hidden');
+            acDropdown.querySelectorAll('button').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    acInput.value = btn.dataset.username;
+                    acUserIdField.value = btn.dataset.userId;
+                    acDropdown.classList.add('hidden');
+                });
+            });
+        }, 200);
+    });
+
+    document.addEventListener('click', function(e) {
+        if (!acDropdown?.contains(e.target) && e.target !== acInput) {
+            acDropdown?.classList.add('hidden');
+        }
+    });
+
     window.grantTempAccess = async function() {
-        const username = document.getElementById('temp-access-username').value.trim();
+        let userId = acUserIdField.value;
+        const username = acInput.value.trim();
         const duration = document.getElementById('temp-access-duration').value;
         if (!username) return alert('Enter a username');
 
-        // Look up user by username
-        const searchRes = await fetch('/api/users/search?q=' + encodeURIComponent(username));
-        const searchData = await searchRes.json();
-        const users = searchData.users || [];
-        if (users.length === 0) return alert('User not found');
-
-        const targetUser = users.find(u => u.username.toLowerCase() === username.toLowerCase());
-        if (!targetUser) return alert('User not found');
+        // If no userId from autocomplete, try search
+        if (!userId) {
+            const searchRes = await fetch('/api/users/search?q=' + encodeURIComponent(username));
+            const searchData = await searchRes.json();
+            const users = searchData.users || [];
+            const targetUser = users.find(u => u.username.toLowerCase() === username.toLowerCase());
+            if (!targetUser) return alert('User not found');
+            userId = targetUser.id;
+        }
 
         const fd = new FormData();
         fd.append('csrf_token', csrf);
         fd.append('chat_id', chatId);
-        fd.append('user_id', targetUser.id);
+        fd.append('user_id', userId);
         fd.append('duration', duration);
 
         const res = await fetch('/admin/roles/temp-access/grant', { method: 'POST', body: fd });
         const data = await res.json();
         if (data.error) return alert(data.error);
 
-        document.getElementById('temp-access-username').value = '';
+        acInput.value = '';
+        acUserIdField.value = '';
         loadTempAccessList();
     };
 
