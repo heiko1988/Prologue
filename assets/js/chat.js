@@ -1452,8 +1452,24 @@ async function loadSidebarChats() {
     const data = await res.json();
     const chats = data.chats || [];
 
-    const privateChats = chats.filter((chat) => normalizeChatType(chat.type) === 'personal');
-    const groupChats = chats.filter((chat) => normalizeChatType(chat.type) === 'group');
+    const isAdmin = (window.CURRENT_USER_ROLE || '') === 'admin';
+
+    // Load saved custom order from localStorage
+    const savedPrivateOrder = JSON.parse(localStorage.getItem('prologue.chatOrder.private') || '[]');
+    const savedGroupOrder = JSON.parse(localStorage.getItem('prologue.chatOrder.group') || '[]');
+
+    // Sort chats by saved order; new chats (not in saved order) appear at end
+    const sortByOrder = (items, order) => {
+        if (!order.length) return items;
+        return items.slice().sort((a, b) => {
+            const ai = order.indexOf(String(a.chat_number));
+            const bi = order.indexOf(String(b.chat_number));
+            return (ai === -1 ? Infinity : ai) - (bi === -1 ? Infinity : bi);
+        });
+    };
+
+    const privateChats = sortByOrder(chats.filter((chat) => normalizeChatType(chat.type) === 'personal'), savedPrivateOrder);
+    const groupChats = sortByOrder(chats.filter((chat) => normalizeChatType(chat.type) === 'group'), savedGroupOrder);
 
     const renderSidebarChatItems = (items) => items.map(chat => {
         const type = normalizeChatType(chat.type);
@@ -1475,9 +1491,22 @@ async function loadSidebarChats() {
         const item = document.createElement('a');
         item.href = `/c/${formatNumber(chat.chat_number)}`;
         item.className = 'block py-2 px-3 rounded-xl hover:bg-zinc-800 mb-1';
+        item.dataset.chatNumber = String(chat.chat_number);
+
+        if (isAdmin) {
+            item.draggable = true;
+        }
 
         const primaryLine = document.createElement('div');
         primaryLine.className = 'font-medium flex items-center gap-2 min-w-0';
+
+        if (isAdmin) {
+            const handle = document.createElement('span');
+            handle.className = 'drag-handle';
+            handle.innerHTML = '⠇';
+            handle.title = 'Reihenfolge ändern';
+            primaryLine.appendChild(handle);
+        }
 
         const title = document.createElement('span');
         title.className = 'truncate';
@@ -1531,6 +1560,88 @@ async function loadSidebarChats() {
         ? groupNodes
         : [makeEmptyState('No group chats yet')]));
 
+    if (isAdmin) {
+        initChatDragAndDrop(privateList, 'prologue.chatOrder.private');
+        initChatDragAndDrop(groupList, 'prologue.chatOrder.group');
+    }
+}
+
+function initChatDragAndDrop(list, storageKey) {
+    // Inject drag-and-drop styles once
+    if (!document.getElementById('prologue-dnd-styles')) {
+        const style = document.createElement('style');
+        style.id = 'prologue-dnd-styles';
+        style.textContent = `
+            .drag-handle {
+                color: #52525b;
+                cursor: grab;
+                user-select: none;
+                flex-shrink: 0;
+                font-size: 14px;
+                line-height: 1;
+                transition: color 0.15s;
+            }
+            .drag-handle:hover { color: #a1a1aa; }
+            a[data-chat-number].drag-over {
+                outline: 2px dashed #10b981;
+                outline-offset: -2px;
+                border-radius: 12px;
+            }
+            a[data-chat-number].dragging { opacity: 0.4; }
+        `;
+        document.head.appendChild(style);
+    }
+
+    let dragSrc = null;
+
+    list.addEventListener('dragstart', (e) => {
+        const item = e.target.closest('a[data-chat-number]');
+        if (!item) return;
+        dragSrc = item;
+        // Small delay so the browser snapshot looks normal
+        requestAnimationFrame(() => item.classList.add('dragging'));
+        e.dataTransfer.effectAllowed = 'move';
+    });
+
+    list.addEventListener('dragend', () => {
+        if (dragSrc) dragSrc.classList.remove('dragging');
+        list.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+        dragSrc = null;
+    });
+
+    list.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        const item = e.target.closest('a[data-chat-number]');
+        if (!item || item === dragSrc) return;
+        e.dataTransfer.dropEffect = 'move';
+        list.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+        item.classList.add('drag-over');
+    });
+
+    list.addEventListener('dragleave', (e) => {
+        const item = e.target.closest('a[data-chat-number]');
+        if (item) item.classList.remove('drag-over');
+    });
+
+    list.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const target = e.target.closest('a[data-chat-number]');
+        if (!target || !dragSrc || target === dragSrc) return;
+        target.classList.remove('drag-over');
+
+        // Insert before or after target based on cursor position
+        const rect = target.getBoundingClientRect();
+        if (e.clientY < rect.top + rect.height / 2) {
+            list.insertBefore(dragSrc, target);
+        } else {
+            list.insertBefore(dragSrc, target.nextSibling);
+        }
+
+        // Persist new order to localStorage
+        const order = Array.from(list.querySelectorAll('a[data-chat-number]'))
+            .map(el => el.dataset.chatNumber);
+        localStorage.setItem(storageKey, JSON.stringify(order));
+    });
 }
 
 async function createGroupChat() {
