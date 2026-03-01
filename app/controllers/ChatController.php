@@ -604,6 +604,7 @@ class ChatController extends Controller {
         try {
             $messages = Database::query(
                 "SELECT m.id, m.chat_id, m.user_id, m.content, m.created_at,
+                        " . ($this->supportsMessageEditDelete() ? "m.edited_at, m.deleted_at," : "") . "
                         m.quoted_message_id, m.quoted_user_id, m.quoted_content,
                         u.username, u.email AS user_email, u.user_number, u.avatar_filename, u.presence_status, u.last_active_at,
                         qu.username AS quoted_username, qu.user_number AS quoted_user_number
@@ -622,6 +623,7 @@ class ChatController extends Controller {
 
             $messages = Database::query(
                 "SELECT m.id, m.chat_id, m.user_id, m.content, m.created_at,
+                        " . ($this->supportsMessageEditDelete() ? "m.edited_at, m.deleted_at," : "") . "
                         m.quoted_message_id, m.quoted_user_id, m.quoted_content,
                         u.username, u.email AS user_email, u.user_number, u.presence_status, u.last_active_at,
                         qu.username AS quoted_username, qu.user_number AS quoted_user_number

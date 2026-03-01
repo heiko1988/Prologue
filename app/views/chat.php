@@ -375,6 +375,11 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                         </div>
                     <?php endif; ?>
                     <?php $mentionMapJson = json_encode((object)($message->mention_map ?? []), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}'; ?>
+                    <?php $isMessageDeleted = !empty($message->deleted_at ?? null); ?>
+                    <?php $isMessageEdited = !empty($message->edited_at ?? null); ?>
+                    <?php if ($isMessageDeleted): ?>
+                    <div class="text-zinc-500 italic text-[15px] leading-6 js-message-content"><i class="fa-solid fa-ban text-xs mr-1"></i>This message has been deleted</div>
+                    <?php else: ?>
                     <?php if ($quotedContent !== ''): ?>
                         <div class="mt-1.5 mb-2 p-2 rounded-lg border border-zinc-700 bg-zinc-900/70 text-sm">
                             <div class="text-zinc-400 text-xs mb-1">
@@ -387,8 +392,9 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                             <div class="text-zinc-300 leading-5 truncate" title="<?= htmlspecialchars($quotedDisplayContent, ENT_QUOTES, 'UTF-8') ?>"><?= nl2br(htmlspecialchars($quotedDisplayContent, ENT_QUOTES, 'UTF-8')) ?></div>
                         </div>
                     <?php endif; ?>
-                    <div class="text-zinc-200 text-[17px] leading-6 js-message-content" data-raw-content="<?= htmlspecialchars($message->content, ENT_QUOTES, 'UTF-8') ?>" data-mention-map="<?= htmlspecialchars($mentionMapJson, ENT_QUOTES, 'UTF-8') ?>"><?= nl2br(htmlspecialchars($message->content, ENT_QUOTES, 'UTF-8')) ?></div>
-                    <?php if (!empty($message->attachments) && is_array($message->attachments)): ?>
+                    <div class="text-zinc-200 text-[17px] leading-6 js-message-content" data-raw-content="<?= htmlspecialchars($message->content, ENT_QUOTES, 'UTF-8') ?>" data-mention-map="<?= htmlspecialchars($mentionMapJson, ENT_QUOTES, 'UTF-8') ?>"><?= nl2br(htmlspecialchars($message->content, ENT_QUOTES, 'UTF-8')) ?><?php if ($isMessageEdited): ?><span class="text-zinc-500 text-xs ml-1">(edited)</span><?php endif; ?></div>
+                    <?php endif; ?>
+                    <?php if (!empty($message->attachments) && is_array($message->attachments) && empty($message->deleted_at)): ?>
                         <div class="mt-3 flex flex-wrap gap-3">
                             <?php foreach ($message->attachments as $attachment): ?>
                                 <?php

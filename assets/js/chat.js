@@ -1886,7 +1886,7 @@ function bindAddUserModal() {
 }
 
 // ===== Message Edit & Delete =====
-let editingMessageId = null;
+window.editingMessageId = null;
 
 function editMessage(msgId) {
     const msgEl = document.querySelector('[data-message-id="' + msgId + '"]');
@@ -1900,7 +1900,7 @@ function editMessage(msgId) {
     if (!input) return;
 
     // Store edit state
-    editingMessageId = msgId;
+    window.editingMessageId = msgId;
     input.value = cleanContent;
     input.focus();
 
@@ -1920,7 +1920,7 @@ function cancelEdit() {
         msgEl.classList.remove('ring-1', 'ring-blue-500/50', 'rounded-lg', 'bg-blue-500/5');
     }
 
-    editingMessageId = null;
+    window.editingMessageId = null;
     const input = document.getElementById('message-input');
     if (input) input.value = '';
 

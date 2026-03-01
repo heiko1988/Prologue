@@ -599,7 +599,7 @@ async function init() {
             }
 
             // Check if we're in edit mode
-            if (typeof editingMessageId !== 'undefined' && editingMessageId) {
+            if (window.editingMessageId) {
                 const editResult = await postForm('/api/messages/edit', {
                     csrf_token: getCsrfToken(),
                     message_id: String(editingMessageId),
@@ -643,7 +643,7 @@ async function init() {
     const messageInput = document.getElementById('message-input');
     if (messageInput) {
         messageInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && typeof editingMessageId !== 'undefined' && editingMessageId) {
+            if (e.key === 'Escape' && window.editingMessageId) {
                 e.preventDefault();
                 cancelEdit();
             }
