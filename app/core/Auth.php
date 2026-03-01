@@ -186,21 +186,36 @@ class Auth {
             return true;
         }
 
-        $requiredRoleId = (int)($chat->required_role_id ?? 0);
-        if ($requiredRoleId <= 0) {
-            return true;
-        }
-
         $userId = (int)($user->id ?? 0);
         if ($userId <= 0) {
             return false;
         }
 
-        if (Role::supportsRoles() && Role::userHasRole($userId, $requiredRoleId)) {
+        if (!Role::supportsRoles()) {
             return true;
         }
 
-        if (Role::supportsRoles() && Role::hasTempAccess((int)($chat->id ?? 0), $userId)) {
+        // Multi-role check
+        if (Role::supportsChatRequiredRoles()) {
+            $roleIds = Role::getChatRequiredRoleIds((int)($chat->id ?? 0));
+            if (empty($roleIds)) {
+                return true;
+            }
+            if (Role::userHasAnyChatRole($userId, (int)($chat->id ?? 0))) {
+                return true;
+            }
+        } else {
+            // Legacy single-role fallback
+            $requiredRoleId = (int)($chat->required_role_id ?? 0);
+            if ($requiredRoleId <= 0) {
+                return true;
+            }
+            if (Role::userHasRole($userId, $requiredRoleId)) {
+                return true;
+            }
+        }
+
+        if (Role::hasTempAccess((int)($chat->id ?? 0), $userId)) {
             return true;
         }
 

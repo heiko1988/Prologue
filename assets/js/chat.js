@@ -1929,20 +1929,21 @@ function cancelEdit() {
 
 function showEditIndicator(msgId, content) {
     hideEditIndicator();
-    const composer = document.getElementById('message-composer-controls');
-    if (!composer) return;
+    const quotePreview = document.getElementById('quote-preview');
+    if (!quotePreview) return;
 
     const indicator = document.createElement('div');
     indicator.id = 'edit-indicator';
-    indicator.className = 'flex items-center gap-2 px-4 py-2 bg-blue-900/30 border border-blue-700/50 rounded-xl mb-2 text-sm';
+    indicator.className = 'absolute left-6 right-6 bg-blue-900/80 border border-blue-700/50 rounded-2xl p-3 z-20 flex items-center gap-2 text-sm';
+    indicator.style.bottom = 'calc(100% + 0.75rem)';
     indicator.innerHTML = `
         <i class="fa-solid fa-pencil text-blue-400 text-xs"></i>
         <span class="text-blue-300 flex-1 truncate">Editing message</span>
-        <button type="button" onclick="cancelEdit()" class="text-zinc-400 hover:text-zinc-200 ml-2" title="Cancel edit">
+        <button type="button" onclick="cancelEdit()" class="text-zinc-400 hover:text-zinc-200" title="Cancel edit (Esc)">
             <i class="fa-solid fa-xmark"></i>
         </button>
     `;
-    composer.parentNode.insertBefore(indicator, composer);
+    quotePreview.parentNode.insertBefore(indicator, quotePreview);
 }
 
 function hideEditIndicator() {

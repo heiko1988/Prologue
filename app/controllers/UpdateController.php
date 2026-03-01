@@ -31,6 +31,10 @@ class UpdateController extends Controller {
                 "ALTER TABLE messages ADD COLUMN edited_at TIMESTAMP NULL DEFAULT NULL AFTER created_at",
                 "ALTER TABLE messages ADD COLUMN deleted_at TIMESTAMP NULL DEFAULT NULL AFTER edited_at",
             ],
+            '0.1.3' => [
+                "CREATE TABLE IF NOT EXISTS chat_required_roles (id INT AUTO_INCREMENT PRIMARY KEY, chat_id INT NOT NULL, role_id INT NOT NULL, UNIQUE KEY uq_chat_role (chat_id, role_id), FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE CASCADE, FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+                "INSERT IGNORE INTO chat_required_roles (chat_id, role_id) SELECT id, required_role_id FROM chats WHERE required_role_id IS NOT NULL",
+            ],
         ];
     }
 

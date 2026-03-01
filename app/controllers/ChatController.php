@@ -815,11 +815,12 @@ class ChatController extends Controller {
         }
 
         $targetUserId = (int)$target->id;
-        // Check if target user has the required role for this chat
-        $requiredRoleId = (int)($chat->required_role_id ?? 0);
+        // Check if target user has any required role for this chat
         $isActorAdmin = strtolower((string)($authUser->role ?? '')) === 'admin';
-        if ($requiredRoleId > 0 && !$isActorAdmin && Role::supportsRoles() && !Role::userHasRole($targetUserId, $requiredRoleId)) {
-            $this->json(['error' => 'User does not have the required role for this chat'], 403);
+        if (!$isActorAdmin && Role::supportsRoles()) {
+            if (!Role::userHasAnyChatRole($targetUserId, $chatId)) {
+                $this->json(['error' => 'User does not have a required role for this chat'], 403);
+            }
         }
 
         $existingTargetMember = Database::query(

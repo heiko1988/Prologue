@@ -195,10 +195,15 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
     </div>
     <?php if ($isGroupChat): ?>
     <?php $otherMembersCount = count(array_filter($members ?? [], fn($m) => (int)$m->id !== (int)$currentUserId)); ?>
-    <?php if (!empty($chatRequiredRole)): ?>
-    <div class="px-6 py-2 border-b border-zinc-800 flex items-center gap-2">
-        <span class="text-xs text-zinc-400">Required Role:</span>
-        <span class="text-[11px] px-2 py-0.5 rounded-full text-white" style="background:<?= htmlspecialchars($chatRequiredRole->color, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($chatRequiredRole->name, ENT_QUOTES, 'UTF-8') ?></span>
+    <?php
+        $chatRequiredRoles = Role::supportsRoles() ? Role::getChatRequiredRoles((int)$chat->id) : [];
+        if (!empty($chatRequiredRoles)):
+    ?>
+    <div class="px-6 py-2 border-b border-zinc-800 flex items-center gap-2 flex-wrap">
+        <span class="text-xs text-zinc-400">Required Roles:</span>
+        <?php foreach ($chatRequiredRoles as $crr): ?>
+        <span class="text-[11px] px-2 py-0.5 rounded-full text-white" style="background:<?= htmlspecialchars($crr->color, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($crr->name, ENT_QUOTES, 'UTF-8') ?></span>
+        <?php endforeach; ?>
     </div>
     <?php endif; ?>
     <div class="px-6 py-3 border-b border-zinc-800 text-sm">
@@ -688,8 +693,8 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
 <div id="set-role-modal" class="hidden fixed inset-0 bg-black/70 z-50 p-4 md:p-6" aria-hidden="true">
     <div class="h-full w-full flex items-center justify-center">
         <div class="w-full max-w-md bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-6" role="dialog">
-            <h2 class="text-lg font-semibold text-zinc-100 mb-4">Set Required Role</h2>
-            <p class="text-sm text-zinc-400 mb-3">Only users with this role (and admins) can access this chat.</p>
+            <h2 class="text-lg font-semibold text-zinc-100 mb-4">Set Required Roles</h2>
+            <p class="text-sm text-zinc-400 mb-3">Users with any of the selected roles (and admins) can access this chat.</p>
             <div id="set-role-options" class="space-y-2 max-h-64 overflow-y-auto"></div>
             <div class="mt-5 flex items-center justify-end">
                 <button type="button" onclick="document.getElementById('set-role-modal').classList.add('hidden')" class="px-4 py-2 rounded-xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-zinc-200">Close</button>
@@ -749,25 +754,55 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
         const res = await fetch('/api/roles');
         const data = await res.json();
         const roles = data.roles || [];
-        const currentRoleId = <?= (int)($chatRequiredRole->id ?? 0) ?>;
+        const currentRoleIds = <?= json_encode(Role::supportsRoles() ? Role::getChatRequiredRoleIds((int)$chat->id) : []) ?>;
 
         const opts = document.getElementById('set-role-options');
-        let html = `<button type="button" onclick="setChatRole(0)" class="w-full text-left text-sm px-3 py-2 rounded-lg ${currentRoleId === 0 ? 'bg-emerald-700 text-emerald-100' : 'bg-zinc-800 hover:bg-zinc-700'}">No restriction (open to all)</button>`;
+        let html = '';
         roles.forEach(r => {
-            const active = Number(r.id) === currentRoleId;
-            html += `<button type="button" onclick="setChatRole(${r.id})" class="w-full text-left text-sm px-3 py-2 rounded-lg flex items-center gap-2 ${active ? 'bg-indigo-700 text-indigo-100' : 'bg-zinc-800 hover:bg-zinc-700'}">
+            const active = currentRoleIds.includes(Number(r.id));
+            html += `<label class="flex items-center gap-3 text-sm px-3 py-2 rounded-lg cursor-pointer ${active ? 'bg-indigo-900/40 border border-indigo-700/50' : 'bg-zinc-800 hover:bg-zinc-700 border border-transparent'}">
+                <input type="checkbox" class="chat-role-checkbox w-4 h-4 accent-emerald-500" value="${r.id}" ${active ? 'checked' : ''}>
                 <span class="inline-block w-3 h-3 rounded-full shrink-0" style="background:${r.color}"></span>
-                ${r.name}
-            </button>`;
+                <span>${r.name}</span>
+            </label>`;
         });
+        html += `<div class="mt-3 flex gap-2">
+            <button type="button" onclick="saveChatRoles()" class="px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white text-sm">Save</button>
+            <button type="button" onclick="clearChatRoles()" class="px-4 py-2 rounded-xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-zinc-200 text-sm">Remove all</button>
+        </div>`;
         opts.innerHTML = html;
     });
 
+    window.saveChatRoles = async function() {
+        const checkboxes = document.querySelectorAll('.chat-role-checkbox:checked');
+        const fd = new FormData();
+        fd.append('csrf_token', csrf);
+        fd.append('chat_id', chatId);
+        checkboxes.forEach(cb => fd.append('role_ids[]', cb.value));
+
+        const res = await fetch('/admin/roles/chat/set', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (data.error) return alert(data.error);
+        location.reload();
+    };
+
+    window.clearChatRoles = async function() {
+        const fd = new FormData();
+        fd.append('csrf_token', csrf);
+        fd.append('chat_id', chatId);
+
+        const res = await fetch('/admin/roles/chat/set', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (data.error) return alert(data.error);
+        location.reload();
+    };
+
+    // Legacy compat
     window.setChatRole = async function(roleId) {
         const fd = new FormData();
         fd.append('csrf_token', csrf);
         fd.append('chat_id', chatId);
-        fd.append('role_id', roleId);
+        if (roleId > 0) fd.append('role_ids[]', roleId);
 
         const res = await fetch('/admin/roles/chat/set', { method: 'POST', body: fd });
         const data = await res.json();

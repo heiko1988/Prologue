@@ -353,4 +353,73 @@ class Role extends Model {
         $supports = ((int)$result) > 0;
         return $supports;
     }
+
+    public static function supportsChatRequiredRoles(): bool {
+        static $supports = null;
+        if ($supports !== null) return $supports;
+        try {
+            $r = self::query("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'chat_required_roles'")->fetchColumn();
+            $supports = ((int)$r) > 0;
+        } catch (Throwable $e) { $supports = false; }
+        return $supports;
+    }
+
+    public static function getChatRequiredRoles(int $chatId): array {
+        if (!self::supportsChatRequiredRoles()) {
+            // Fallback to single role
+            $role = self::getChatRole($chatId);
+            return $role ? [$role] : [];
+        }
+        return self::query(
+            "SELECT r.* FROM roles r JOIN chat_required_roles crr ON crr.role_id = r.id WHERE crr.chat_id = ? ORDER BY r.position DESC, r.name ASC",
+            [$chatId]
+        )->fetchAll();
+    }
+
+    public static function getChatRequiredRoleIds(int $chatId): array {
+        if (!self::supportsChatRequiredRoles()) {
+            $role = self::getChatRole($chatId);
+            return $role ? [(int)$role->id] : [];
+        }
+        $rows = self::query("SELECT role_id FROM chat_required_roles WHERE chat_id = ?", [$chatId])->fetchAll();
+        return array_map(fn($r) => (int)$r->role_id, $rows);
+    }
+
+    public static function setChatRequiredRoles(int $chatId, array $roleIds): void {
+        if (!self::supportsChatRequiredRoles()) {
+            // Fallback: use the first role
+            self::setChatRole($chatId, !empty($roleIds) ? (int)$roleIds[0] : null);
+            return;
+        }
+        // Clear existing
+        self::query("DELETE FROM chat_required_roles WHERE chat_id = ?", [$chatId]);
+        // Also update legacy column
+        if (empty($roleIds)) {
+            self::query("UPDATE chats SET required_role_id = NULL WHERE id = ?", [$chatId]);
+        } else {
+            self::query("UPDATE chats SET required_role_id = ? WHERE id = ?", [(int)$roleIds[0], $chatId]);
+            foreach ($roleIds as $roleId) {
+                $roleId = (int)$roleId;
+                if ($roleId <= 0) continue;
+                self::query("INSERT IGNORE INTO chat_required_roles (chat_id, role_id) VALUES (?, ?)", [$chatId, $roleId]);
+                // Auto-add users with this role
+                self::syncAllUsersToChat($chatId, $roleId);
+            }
+        }
+    }
+
+    public static function userHasAnyChatRole(int $userId, int $chatId): bool {
+        if (!self::supportsChatRequiredRoles()) {
+            // Fallback to single role check
+            $chat = self::query("SELECT required_role_id FROM chats WHERE id = ?", [$chatId])->fetch();
+            if (!$chat || !$chat->required_role_id) return true;
+            return self::userHasRole($userId, (int)$chat->required_role_id);
+        }
+        $roleIds = self::getChatRequiredRoleIds($chatId);
+        if (empty($roleIds)) return true; // No restriction
+        foreach ($roleIds as $rid) {
+            if (self::userHasRole($userId, $rid)) return true;
+        }
+        return false;
+    }
 }

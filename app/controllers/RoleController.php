@@ -181,7 +181,16 @@ class RoleController extends Controller {
         Auth::csrfValidate();
 
         $chatId = (int)($_POST['chat_id'] ?? 0);
-        $roleId = (int)($_POST['role_id'] ?? 0);
+        // Support both single role_id and multiple role_ids[]
+        $roleIds = $_POST['role_ids'] ?? null;
+        if ($roleIds === null) {
+            $singleId = (int)($_POST['role_id'] ?? 0);
+            $roleIds = $singleId > 0 ? [$singleId] : [];
+        }
+        if (!is_array($roleIds)) {
+            $roleIds = array_map('intval', explode(',', (string)$roleIds));
+        }
+        $roleIds = array_filter(array_map('intval', $roleIds), fn($id) => $id > 0);
 
         if ($chatId <= 0) {
             $this->json(['error' => 'Invalid chat ID'], 400);
@@ -196,14 +205,15 @@ class RoleController extends Controller {
             $this->json(['error' => 'Roles can only be assigned to group chats'], 400);
         }
 
-        if ($roleId > 0) {
-            $role = Role::find($roleId);
+        // Validate all role IDs
+        foreach ($roleIds as $rid) {
+            $role = Role::find($rid);
             if (!$role) {
-                $this->json(['error' => 'Role not found'], 404);
+                $this->json(['error' => 'Role not found: ' . $rid], 404);
             }
         }
 
-        Role::setChatRole($chatId, $roleId > 0 ? $roleId : null);
+        Role::setChatRequiredRoles($chatId, $roleIds);
         $this->json(['success' => true]);
     }
 

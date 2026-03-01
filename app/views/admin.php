@@ -643,15 +643,42 @@
                 </div>
                 <button type="button" onclick="createRole()" class="bg-emerald-700 hover:bg-emerald-600 text-white text-sm px-4 py-2 rounded-lg">Create</button>
             </div>
-            <div class="flex flex-wrap gap-3 mt-3">
-                <label class="text-xs text-zinc-300 flex items-center gap-1"><input type="checkbox" id="role-create-can_kick" class="rounded"> Kick</label>
-                <label class="text-xs text-zinc-300 flex items-center gap-1"><input type="checkbox" id="role-create-can_ban" class="rounded"> Ban</label>
-                <label class="text-xs text-zinc-300 flex items-center gap-1"><input type="checkbox" id="role-create-can_mute" class="rounded"> Mute</label>
-                <label class="text-xs text-zinc-300 flex items-center gap-1"><input type="checkbox" id="role-create-can_pin" class="rounded"> Pin</label>
-                <label class="text-xs text-zinc-300 flex items-center gap-1"><input type="checkbox" id="role-create-can_rename_chat" class="rounded"> Rename Chat</label>
-                <label class="text-xs text-zinc-300 flex items-center gap-1"><input type="checkbox" id="role-create-can_manage_channels" class="rounded"> Manage Channels</label>
-                <label class="text-xs text-zinc-300 flex items-center gap-1"><input type="checkbox" id="role-create-can_assign_roles" class="rounded"> Assign Roles</label>
-                <label class="text-xs text-zinc-300 flex items-center gap-1"><input type="checkbox" id="role-create-can_move_users" class="rounded"> Move Users</label>
+            <div class="mt-4">
+                <span class="text-xs text-zinc-400 block mb-2">Permissions</span>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <label class="flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800/30 px-3 py-2 cursor-pointer hover:bg-zinc-800/60 transition">
+                        <input type="checkbox" id="role-create-can_kick" class="w-4 h-4 accent-emerald-500 shrink-0">
+                        <span class="text-sm text-zinc-200">Kick</span>
+                    </label>
+                    <label class="flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800/30 px-3 py-2 cursor-pointer hover:bg-zinc-800/60 transition">
+                        <input type="checkbox" id="role-create-can_ban" class="w-4 h-4 accent-emerald-500 shrink-0">
+                        <span class="text-sm text-zinc-200">Ban</span>
+                    </label>
+                    <label class="flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800/30 px-3 py-2 cursor-pointer hover:bg-zinc-800/60 transition">
+                        <input type="checkbox" id="role-create-can_mute" class="w-4 h-4 accent-emerald-500 shrink-0">
+                        <span class="text-sm text-zinc-200">Mute</span>
+                    </label>
+                    <label class="flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800/30 px-3 py-2 cursor-pointer hover:bg-zinc-800/60 transition">
+                        <input type="checkbox" id="role-create-can_pin" class="w-4 h-4 accent-emerald-500 shrink-0">
+                        <span class="text-sm text-zinc-200">Pin</span>
+                    </label>
+                    <label class="flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800/30 px-3 py-2 cursor-pointer hover:bg-zinc-800/60 transition">
+                        <input type="checkbox" id="role-create-can_rename_chat" class="w-4 h-4 accent-emerald-500 shrink-0">
+                        <span class="text-sm text-zinc-200">Rename Chat</span>
+                    </label>
+                    <label class="flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800/30 px-3 py-2 cursor-pointer hover:bg-zinc-800/60 transition">
+                        <input type="checkbox" id="role-create-can_manage_channels" class="w-4 h-4 accent-emerald-500 shrink-0">
+                        <span class="text-sm text-zinc-200">Channels</span>
+                    </label>
+                    <label class="flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800/30 px-3 py-2 cursor-pointer hover:bg-zinc-800/60 transition">
+                        <input type="checkbox" id="role-create-can_assign_roles" class="w-4 h-4 accent-emerald-500 shrink-0">
+                        <span class="text-sm text-zinc-200">Assign Roles</span>
+                    </label>
+                    <label class="flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800/30 px-3 py-2 cursor-pointer hover:bg-zinc-800/60 transition">
+                        <input type="checkbox" id="role-create-can_move_users" class="w-4 h-4 accent-emerald-500 shrink-0">
+                        <span class="text-sm text-zinc-200">Move Users</span>
+                    </label>
+                </div>
             </div>
         </div>
     </section>
@@ -682,16 +709,40 @@
                         <input type="text" id="role-edit-description" maxlength="255" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm">
                     </div>
                     <div>
-                        <label class="text-xs text-zinc-400 block mb-1">Permissions</label>
-                        <div class="flex flex-wrap gap-3">
-                            <label class="text-xs text-zinc-300 flex items-center gap-1"><input type="checkbox" id="role-edit-can_kick" class="rounded"> Kick</label>
-                            <label class="text-xs text-zinc-300 flex items-center gap-1"><input type="checkbox" id="role-edit-can_ban" class="rounded"> Ban</label>
-                            <label class="text-xs text-zinc-300 flex items-center gap-1"><input type="checkbox" id="role-edit-can_mute" class="rounded"> Mute</label>
-                            <label class="text-xs text-zinc-300 flex items-center gap-1"><input type="checkbox" id="role-edit-can_pin" class="rounded"> Pin</label>
-                            <label class="text-xs text-zinc-300 flex items-center gap-1"><input type="checkbox" id="role-edit-can_rename_chat" class="rounded"> Rename Chat</label>
-                            <label class="text-xs text-zinc-300 flex items-center gap-1"><input type="checkbox" id="role-edit-can_manage_channels" class="rounded"> Manage Channels</label>
-                            <label class="text-xs text-zinc-300 flex items-center gap-1"><input type="checkbox" id="role-edit-can_assign_roles" class="rounded"> Assign Roles</label>
-                            <label class="text-xs text-zinc-300 flex items-center gap-1"><input type="checkbox" id="role-edit-can_move_users" class="rounded"> Move Users</label>
+                        <label class="text-xs text-zinc-400 block mb-2">Permissions</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <label class="flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800/30 px-3 py-2 cursor-pointer hover:bg-zinc-800/60 transition">
+                                <input type="checkbox" id="role-edit-can_kick" class="w-4 h-4 accent-emerald-500 shrink-0">
+                                <span class="text-sm text-zinc-200">Kick</span>
+                            </label>
+                            <label class="flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800/30 px-3 py-2 cursor-pointer hover:bg-zinc-800/60 transition">
+                                <input type="checkbox" id="role-edit-can_ban" class="w-4 h-4 accent-emerald-500 shrink-0">
+                                <span class="text-sm text-zinc-200">Ban</span>
+                            </label>
+                            <label class="flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800/30 px-3 py-2 cursor-pointer hover:bg-zinc-800/60 transition">
+                                <input type="checkbox" id="role-edit-can_mute" class="w-4 h-4 accent-emerald-500 shrink-0">
+                                <span class="text-sm text-zinc-200">Mute</span>
+                            </label>
+                            <label class="flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800/30 px-3 py-2 cursor-pointer hover:bg-zinc-800/60 transition">
+                                <input type="checkbox" id="role-edit-can_pin" class="w-4 h-4 accent-emerald-500 shrink-0">
+                                <span class="text-sm text-zinc-200">Pin</span>
+                            </label>
+                            <label class="flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800/30 px-3 py-2 cursor-pointer hover:bg-zinc-800/60 transition">
+                                <input type="checkbox" id="role-edit-can_rename_chat" class="w-4 h-4 accent-emerald-500 shrink-0">
+                                <span class="text-sm text-zinc-200">Rename Chat</span>
+                            </label>
+                            <label class="flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800/30 px-3 py-2 cursor-pointer hover:bg-zinc-800/60 transition">
+                                <input type="checkbox" id="role-edit-can_manage_channels" class="w-4 h-4 accent-emerald-500 shrink-0">
+                                <span class="text-sm text-zinc-200">Channels</span>
+                            </label>
+                            <label class="flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800/30 px-3 py-2 cursor-pointer hover:bg-zinc-800/60 transition">
+                                <input type="checkbox" id="role-edit-can_assign_roles" class="w-4 h-4 accent-emerald-500 shrink-0">
+                                <span class="text-sm text-zinc-200">Assign Roles</span>
+                            </label>
+                            <label class="flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800/30 px-3 py-2 cursor-pointer hover:bg-zinc-800/60 transition">
+                                <input type="checkbox" id="role-edit-can_move_users" class="w-4 h-4 accent-emerald-500 shrink-0">
+                                <span class="text-sm text-zinc-200">Move Users</span>
+                            </label>
                         </div>
                     </div>
                 </div>
