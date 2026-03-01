@@ -13,6 +13,12 @@
     </script>
     <style>
         body { background: #09090b; }
+        /* Fix mobile viewport height (100vh includes browser chrome on mobile) */
+        .app-height { height: 100vh; height: 100dvh; }
+        @supports not (height: 100dvh) {
+            .app-height { height: calc(var(--app-height, 100vh)); }
+        }
+
         .prologue-accent { color: #34d399; }
         .sidebar { background: #111827; }
         .typing-dots { display: inline-flex; gap: 1px; margin-left: 2px; }
@@ -111,9 +117,23 @@
             }
         }
     </style>
+    <script>
+        (function(){
+            function setAppHeight(){
+                document.documentElement.style.setProperty('--app-height', window.innerHeight + 'px');
+            }
+            setAppHeight();
+            window.addEventListener('resize', setAppHeight);
+            if (window.visualViewport) {
+                window.visualViewport.addEventListener('resize', function(){
+                    document.documentElement.style.setProperty('--app-height', window.visualViewport.height + 'px');
+                });
+            }
+        })();
+    </script>
 </head>
 <?php $currentUser = Auth::user(); ?>
-<body class="text-gray-200 <?= $currentUser ? 'h-screen overflow-hidden' : 'min-h-screen overflow-y-auto' ?>">
+<body class="text-gray-200 <?= $currentUser ? 'app-height overflow-hidden' : 'min-h-screen overflow-y-auto' ?>">
     <?php
         $requestPath = (string)parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH);
         $isChatRoute = preg_match('#(?:^|/)c/[^/]+$#', $requestPath) === 1;
@@ -241,7 +261,7 @@
         }
     ?>
     <?php if ($currentUser): ?>
-    <div class="h-screen flex flex-col">
+    <div class="app-height flex flex-col">
         <div id="chat-call-status-bar" class="hidden w-full px-6 py-2 border-b border-transparent text-sm font-medium flex items-center gap-3 shrink-0">
             <span id="chat-call-status-label"></span>
             <span id="chat-call-status-duration" class="hidden text-xs opacity-80 tabular-nums">00:00</span>
