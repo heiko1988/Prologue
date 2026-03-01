@@ -391,6 +391,12 @@
                     <option value="">Default</option>
                 </select>
             </div>
+            <div class="flex items-center justify-between gap-4 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3">
+                <span class="text-zinc-100 shrink-0">Audio Output</span>
+                <select id="setting-sink-device" class="w-full max-w-xs rounded-xl border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    <option value="">Default</option>
+                </select>
+            </div>
             <div id="media-device-permission-hint" class="hidden">
                 <button type="button" id="media-device-request-btn" class="px-4 py-2 rounded-lg text-sm bg-emerald-700 hover:bg-emerald-600 text-white">
                     Grant camera &amp; microphone permission
@@ -403,8 +409,10 @@
         (function () {
             const LS_MIC = 'prologue.selectedMicId';
             const LS_CAM = 'prologue.selectedCamId';
-            const micSel = document.getElementById('setting-mic-device');
-            const camSel = document.getElementById('setting-cam-device');
+            const LS_SINK = 'prologue.selectedSinkId';
+            const micSel  = document.getElementById('setting-mic-device');
+            const camSel  = document.getElementById('setting-cam-device');
+            const sinkSel = document.getElementById('setting-sink-device');
             const status = document.getElementById('media-device-status');
             const hint   = document.getElementById('media-device-permission-hint');
             const reqBtn = document.getElementById('media-device-request-btn');
@@ -433,7 +441,8 @@
                 if (hint) hint.classList.add('hidden');
 
                 const savedMic = localStorage.getItem(LS_MIC) || '';
-                const savedCam = localStorage.getItem(LS_CAM) || '';
+                const savedCam  = localStorage.getItem(LS_CAM)  || '';
+                const savedSink = localStorage.getItem(LS_SINK) || '';
 
                 // Populate mic
                 while (micSel.options.length > 1) micSel.remove(1);
@@ -453,6 +462,23 @@
                 });
                 if (!savedCam) camSel.value = '';
 
+                // Populate output
+                if (sinkSel && typeof HTMLMediaElement.prototype.setSinkId === 'function') {
+                    const sinks = devices.filter(function(d) { return d.kind === 'audiooutput'; });
+                    while (sinkSel.options.length > 1) sinkSel.remove(1);
+                    sinks.forEach(function(d) {
+                        var opt = new Option(d.label || 'Speaker ' + d.deviceId.slice(0,6), d.deviceId);
+                        if (d.deviceId === savedSink) opt.selected = true;
+                        sinkSel.add(opt);
+                    });
+                    if (!savedSink) sinkSel.value = '';
+                } else if (sinkSel) {
+                    sinkSel.disabled = true;
+                    sinkSel.title = 'Not supported in this browser';
+                    var opt = sinkSel.options[0];
+                    if (opt) opt.text = 'Not supported in this browser';
+                }
+
                 setStatus('');
             }
 
@@ -466,6 +492,13 @@
                 setStatus('Saved.');
                 setTimeout(() => setStatus(''), 1500);
             });
+            if (sinkSel) {
+                sinkSel.addEventListener('change', function () {
+                    localStorage.setItem(LS_SINK, this.value);
+                    setStatus('Saved.');
+                    setTimeout(() => setStatus(''), 1500);
+                });
+            }
 
             if (reqBtn) {
                 reqBtn.addEventListener('click', async function () {

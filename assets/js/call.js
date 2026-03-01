@@ -21,6 +21,11 @@ async function getUserMediaCam(extra) {
     }
     return await navigator.mediaDevices.getUserMedia(Object.assign({}, extra, { video: true }));
 }
+function applyPreferredSink(audioEl) {
+    if (!audioEl || typeof audioEl.setSinkId !== 'function') return;
+    var id = localStorage.getItem('prologue.selectedSinkId');
+    if (id) audioEl.setSinkId(id).catch(function() {});
+}
 
 
 
@@ -496,6 +501,7 @@ function ensureCallRingingAudio() {
     callRingingAudio = new Audio('/assets/sounds/callringing.wav');
     callRingingAudio.preload = 'auto';
     callRingingAudio.loop = true;
+    applyPreferredSink(callRingingAudio);
     return callRingingAudio;
 }
 
@@ -1607,6 +1613,7 @@ function ensureRemoteAudioElement(peerId) {
     audioElement.dataset.peerId = String(peerId);
     audioElement.className = 'fixed w-px h-px opacity-0 pointer-events-none -z-10';
     document.body.appendChild(audioElement);
+    applyPreferredSink(audioElement);
     remoteAudioElements.set(peerId, audioElement);
     return audioElement;
 }
