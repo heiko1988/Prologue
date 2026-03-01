@@ -1886,60 +1886,42 @@ function bindAddUserModal() {
 }
 
 // ===== Message Edit & Delete =====
-(function initMessageEditDelete() {
-    const container = document.getElementById('messages-container');
-    if (!container) return;
+async function editMessage(msgId) {
+    const msgEl = document.querySelector('[data-message-id="' + msgId + '"]');
+    if (!msgEl) return;
+    const contentEl = msgEl.querySelector('.js-message-content');
+    if (!contentEl) return;
+    const rawContent = contentEl.getAttribute('data-raw-content') || contentEl.textContent.trim();
+    const cleanContent = rawContent.replace(/\s*\(edited\)\s*$/, '').trim();
 
-    container.addEventListener('click', async (e) => {
-        // Edit button clicked
-        const editBtn = e.target.closest('.js-edit-link');
-        if (editBtn) {
-            e.preventDefault();
-            const msgId = editBtn.getAttribute('data-edit-message-id');
-            const msgEl = editBtn.closest('[data-message-id]');
-            if (!msgEl) return;
-            const contentEl = msgEl.querySelector('.js-message-content');
-            if (!contentEl) return;
-            const rawContent = contentEl.getAttribute('data-raw-content') || contentEl.textContent.trim();
+    const newContent = prompt('Edit message:', cleanContent);
+    if (newContent === null || newContent.trim() === '' || newContent.trim() === cleanContent) return;
 
-            // Replace (edited) suffix if present
-            const cleanContent = rawContent.replace(/\s*\(edited\)\s*$/, '').trim();
-
-            const newContent = prompt('Edit message:', cleanContent);
-            if (newContent === null || newContent.trim() === '' || newContent.trim() === cleanContent) return;
-
-            const result = await postForm('/api/messages/edit', {
-                csrf_token: getCsrfToken(),
-                message_id: msgId,
-                content: newContent.trim()
-            });
-            if (result.success) {
-                showToast('Message edited', 'success');
-            } else {
-                showToast(result.error || 'Failed to edit message', 'error');
-            }
-            return;
-        }
-
-        // Delete button clicked
-        const deleteBtn = e.target.closest('.js-delete-link');
-        if (deleteBtn) {
-            e.preventDefault();
-            const msgId = deleteBtn.getAttribute('data-delete-message-id');
-            if (!confirm('Delete this message?')) return;
-
-            const result = await postForm('/api/messages/delete', {
-                csrf_token: getCsrfToken(),
-                message_id: msgId
-            });
-            if (result.success) {
-                showToast('Message deleted', 'success');
-            } else {
-                showToast(result.error || 'Failed to delete message', 'error');
-            }
-        }
+    const result = await postForm('/api/messages/edit', {
+        csrf_token: getCsrfToken(),
+        message_id: String(msgId),
+        content: newContent.trim()
     });
-})();
+    if (result.success) {
+        showToast('Message edited', 'success');
+    } else {
+        showToast(result.error || 'Failed to edit message', 'error');
+    }
+}
+
+async function deleteMessage(msgId) {
+    if (!confirm('Delete this message?')) return;
+
+    const result = await postForm('/api/messages/delete', {
+        csrf_token: getCsrfToken(),
+        message_id: String(msgId)
+    });
+    if (result.success) {
+        showToast('Message deleted', 'success');
+    } else {
+        showToast(result.error || 'Failed to delete message', 'error');
+    }
+}
 async function removeGroupMember(userId, username) {
     if (!currentChat) return;
     if (normalizeChatType(currentChat.type) !== 'group') {
@@ -2892,8 +2874,8 @@ function renderMessages(messages, options = {}) {
                                 <button type="button" class="text-zinc-400 hover:text-zinc-300 js-quote-link" title="Quote" aria-label="Quote" data-quote-message-id="${Number(msg.id)}" data-quote-username="${escapeHtml(String(msg.username || ''))}" data-quote-user-number="${escapeHtml(String(msg.user_number || ''))}" data-quote-content="${escapeHtml(String(msg.content || ''))}" data-quote-mention-map="${mentionMapJson}"><i class="fa-solid fa-reply" aria-hidden="true"></i></button>
                                 <button type="button" class="text-zinc-400 hover:text-zinc-300 js-pin-link" title="Pin" aria-label="Pin" data-pin-message-id="${Number(msg.id)}"><i class="fa-solid fa-thumbtack" aria-hidden="true"></i></button>
                                 <button type="button" class="text-zinc-400 hover:text-zinc-300 js-react-link" title="React" aria-label="React" data-react-message-id="${Number(msg.id)}"><i class="fa-solid fa-thumbs-up" aria-hidden="true"></i></button>
-                                ${Number(msg.user_id) === window.CURRENT_USER_ID && !msg.is_deleted ? `<button type="button" class="text-zinc-400 hover:text-blue-300 js-edit-link" title="Edit" aria-label="Edit" data-edit-message-id="${Number(msg.id)}"><i class="fa-solid fa-pencil" aria-hidden="true"></i></button>` : ''}
-                                ${(Number(msg.user_id) === window.CURRENT_USER_ID || (window.CURRENT_USER_ROLE || '').toLowerCase() === 'admin') && !msg.is_deleted ? `<button type="button" class="text-zinc-400 hover:text-red-300 js-delete-link" title="Delete" aria-label="Delete" data-delete-message-id="${Number(msg.id)}"><i class="fa-solid fa-trash" aria-hidden="true"></i></button>` : ''}
+                                ${Number(msg.user_id) === window.CURRENT_USER_ID && !msg.is_deleted ? `<button type="button" onclick="editMessage(${Number(msg.id)})" class="text-zinc-400 hover:text-blue-300" title="Edit" aria-label="Edit"><i class="fa-solid fa-pencil" aria-hidden="true"></i></button>` : ''}
+                                ${(Number(msg.user_id) === window.CURRENT_USER_ID || (window.CURRENT_USER_ROLE || '').toLowerCase() === 'admin') && !msg.is_deleted ? `<button type="button" onclick="deleteMessage(${Number(msg.id)})" class="text-zinc-400 hover:text-red-300" title="Delete" aria-label="Delete"><i class="fa-solid fa-trash" aria-hidden="true"></i></button>` : ''}
                             </div>
                             ${reactionBadgesMarkup}
                         </div>
@@ -2979,16 +2961,15 @@ function renderMessages(messages, options = {}) {
         // Copy message text
         html += `<button data-action="copy" data-msg-id="${msgId}"><i class="fa-regular fa-copy text-zinc-500"></i> Copy</button>`;
 
-        // Edit (own messages only)
-        const msgUserId = msgEl.querySelector('.js-message-content')?.closest('[data-message-id]')?.getAttribute('data-message-user-id');
-        const editLink = msgEl.querySelector('.js-edit-link');
-        if (editLink) {
+        // Edit (own messages only) - check if edit button exists in the message
+        const hasEditBtn = msgEl.querySelector('[onclick*="editMessage"]');
+        if (hasEditBtn) {
             html += `<button data-action="edit" data-msg-id="${msgId}"><i class="fa-solid fa-pencil text-zinc-500"></i> Edit</button>`;
         }
 
         // Delete (own messages + admin)
-        const deleteLink = msgEl.querySelector('.js-delete-link');
-        if (deleteLink) {
+        const hasDeleteBtn = msgEl.querySelector('[onclick*="deleteMessage"]');
+        if (hasDeleteBtn) {
             html += `<button data-action="delete" data-msg-id="${msgId}"><i class="fa-solid fa-trash text-zinc-500"></i> Delete</button>`;
         }
 
@@ -3032,11 +3013,9 @@ function renderMessages(messages, options = {}) {
                 navigator.clipboard.writeText(text).catch(() => {});
             }
         } else if (action === 'edit' && msgEl) {
-            const editBtn = msgEl.querySelector('.js-edit-link');
-            if (editBtn) editBtn.click();
+            editMessage(Number(msgId));
         } else if (action === 'delete' && msgEl) {
-            const deleteBtn = msgEl.querySelector('.js-delete-link');
-            if (deleteBtn) deleteBtn.click();
+            deleteMessage(Number(msgId));
         }
         hideMenu();
     });
@@ -3047,7 +3026,7 @@ function renderMessages(messages, options = {}) {
     });
 
     // Long-press detection on message elements
-    const container = document.getElementById('messages-container');
+    const container = document.getElementById('messages');
     if (!container) return;
 
     container.addEventListener('touchstart', (e) => {
