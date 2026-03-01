@@ -1,5 +1,16 @@
 // Extracted from app.js for feature-focused organization.
 
+// ── Media device helpers (device selection from Settings) ────────────────────
+function getPrefMicConstraint() {
+    const id = localStorage.getItem('prologue.selectedMicId');
+    return id ? { deviceId: { ideal: id } } : true;
+}
+function getPrefCamConstraint() {
+    const id = localStorage.getItem('prologue.selectedCamId');
+    return id ? { deviceId: { ideal: id } } : true;
+}
+
+
 // ── Speaking detection state ──────────────────────────────────────────────────
 let speakingAudioCtx = null;
 let localSpeakingRaf = null;
@@ -913,7 +924,7 @@ async function startVoiceCall(options = {}) {
         setChatCallStatusBar('ringing');
         syncCallRingingState({ state: 'ringing', callId: Number(currentCallId || 0), ringingDirection: 'outgoing', incomingAlert: false });
     }
-    localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    localStream = await navigator.mediaDevices.getUserMedia({ audio: getPrefMicConstraint(), video: false });
     bindCallAudioUnlockHandlers();
     startLocalSpeakingDetection();
     const localVideo = document.getElementById('local-video');
@@ -1058,7 +1069,7 @@ async function toggleVideoInCall() {
 
     if (!isVideoEnabled) {
         try {
-            const cameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
+            const cameraStream = await navigator.mediaDevices.getUserMedia({ video: getPrefCamConstraint() });
             const videoTrack = cameraStream.getVideoTracks()[0];
             if (!videoTrack) return;
 
@@ -1497,7 +1508,7 @@ async function stopScreenShare(restoreCamera = true) {
 
     if (restoreCamera && isVideoEnabled && localStream) {
         try {
-            const cameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
+            const cameraStream = await navigator.mediaDevices.getUserMedia({ video: getPrefCamConstraint() });
             const cameraTrack = cameraStream.getVideoTracks()[0];
             if (cameraTrack) {
                 localStream.getVideoTracks().forEach(t => { t.stop(); localStream.removeTrack(t); });

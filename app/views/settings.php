@@ -375,6 +375,115 @@
         </div>
         <p id="notification-settings-status" class="mt-3 text-xs text-zinc-500" aria-live="polite"></p>
     </section>
+    <section class=bg-zinc-900 border border-zinc-700 rounded-2xl p-6 w-full>
+        <h2 class="text-xl font-semibold mb-4">Media Devices</h2>
+        <p class="text-sm text-zinc-400 mb-5">Select which camera and microphone to use for calls. Changes save automatically.</p>
+        <div class="space-y-4" id="media-device-settings">
+            <div class="flex items-center justify-between gap-4 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3">
+                <span class="text-zinc-100 shrink-0">Microphone</span>
+                <select id="setting-mic-device" class="w-full max-w-xs rounded-xl border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    <option value="">Default</option>
+                </select>
+            </div>
+            <div class="flex items-center justify-between gap-4 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3">
+                <span class="text-zinc-100 shrink-0">Camera</span>
+                <select id="setting-cam-device" class="w-full max-w-xs rounded-xl border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    <option value="">Default</option>
+                </select>
+            </div>
+            <div id="media-device-permission-hint" class="hidden">
+                <button type="button" id="media-device-request-btn" class="px-4 py-2 rounded-lg text-sm bg-emerald-700 hover:bg-emerald-600 text-white">
+                    Grant camera &amp; microphone permission
+                </button>
+                <p class="text-xs text-zinc-500 mt-1">Permission is needed to list available devices.</p>
+            </div>
+        </div>
+        <p id="media-device-status" class="mt-3 text-xs text-zinc-500" aria-live="polite"></p>
+        <script>
+        (function () {
+            const LS_MIC = 'prologue.selectedMicId';
+            const LS_CAM = 'prologue.selectedCamId';
+            const micSel = document.getElementById('setting-mic-device');
+            const camSel = document.getElementById('setting-cam-device');
+            const status = document.getElementById('media-device-status');
+            const hint   = document.getElementById('media-device-permission-hint');
+            const reqBtn = document.getElementById('media-device-request-btn');
+
+            function setStatus(msg) { if (status) status.textContent = msg; }
+
+            async function populateDevices() {
+                let devices;
+                try {
+                    devices = await navigator.mediaDevices.enumerateDevices();
+                } catch (e) {
+                    setStatus('Could not enumerate devices.');
+                    return;
+                }
+
+                const mics = devices.filter(d => d.kind === 'audioinput');
+                const cams = devices.filter(d => d.kind === 'videoinput');
+
+                // Check if labels are available (permissions granted)
+                const hasLabels = devices.some(d => d.label);
+                if (!hasLabels) {
+                    if (hint) hint.classList.remove('hidden');
+                    setStatus('Grant permission to see device names.');
+                    return;
+                }
+                if (hint) hint.classList.add('hidden');
+
+                const savedMic = localStorage.getItem(LS_MIC) || '';
+                const savedCam = localStorage.getItem(LS_CAM) || '';
+
+                // Populate mic
+                while (micSel.options.length > 1) micSel.remove(1);
+                mics.forEach(d => {
+                    const opt = new Option(d.label || 'Microphone ' + d.deviceId.slice(0,6), d.deviceId);
+                    if (d.deviceId === savedMic) opt.selected = true;
+                    micSel.add(opt);
+                });
+                if (!savedMic) micSel.value = '';
+
+                // Populate cam
+                while (camSel.options.length > 1) camSel.remove(1);
+                cams.forEach(d => {
+                    const opt = new Option(d.label || 'Camera ' + d.deviceId.slice(0,6), d.deviceId);
+                    if (d.deviceId === savedCam) opt.selected = true;
+                    camSel.add(opt);
+                });
+                if (!savedCam) camSel.value = '';
+
+                setStatus('');
+            }
+
+            micSel.addEventListener('change', function () {
+                localStorage.setItem(LS_MIC, this.value);
+                setStatus('Saved.');
+                setTimeout(() => setStatus(''), 1500);
+            });
+            camSel.addEventListener('change', function () {
+                localStorage.setItem(LS_CAM, this.value);
+                setStatus('Saved.');
+                setTimeout(() => setStatus(''), 1500);
+            });
+
+            if (reqBtn) {
+                reqBtn.addEventListener('click', async function () {
+                    try {
+                        const s = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+                        s.getTracks().forEach(t => t.stop());
+                        await populateDevices();
+                    } catch (e) {
+                        setStatus('Permission denied.');
+                    }
+                });
+            }
+
+            populateDevices();
+        })();
+        </script>
+    </section>
+
 
     <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 w-full">
         <h2 class="text-xl font-semibold mb-4">Time Zone</h2>
