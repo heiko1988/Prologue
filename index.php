@@ -222,6 +222,10 @@ $router->get('/api/roles', 'RoleController@list');
 $router->get('/api/roles/temp-access', 'RoleController@getTempAccess');
 $router->get('/api/roles/temp-access/user', 'RoleController@getUserTempAccess');
 $router->get('/api/roles/user', 'RoleController@getUserRoles');
+$router->post('/admin/chat-bans/ban', 'RoleController@banFromChat');
+$router->post('/admin/chat-bans/unban', 'RoleController@unbanFromChat');
+$router->get('/api/chat-bans', 'RoleController@getChatBans');
+$router->post('/chat/move-user', 'ChatController@moveUserToChat');
 
 // Friends
 $router->post('/friends/request', 'FriendController@sendRequest');

@@ -214,7 +214,9 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                     <?php endif; ?>
                     <span class="inline-block w-1.5 h-1.5 rounded-full <?= htmlspecialchars($member->effective_status_dot_class ?? 'bg-zinc-500', ENT_QUOTES, 'UTF-8') ?>" title="<?= htmlspecialchars($member->effective_status_label ?? 'Offline', ENT_QUOTES, 'UTF-8') ?>"></span>
                     <?php if ((int)$member->id !== (int)$chat->created_by): ?>
-                    <button onclick='removeGroupMember(<?= (int)$member->id ?>, <?= json_encode((string)$member->username, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>)' class="text-red-300 hover:text-red-200">×</button>
+                    <button onclick='removeGroupMember(<?= (int)$member->id ?>, <?= json_encode((string)$member->username, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>)' class="text-red-300 hover:text-red-200 member-action-kick" title="Kick">×</button>
+                    <button onclick='banGroupMember(<?= (int)$member->id ?>, <?= json_encode((string)$member->username, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>)' class="text-orange-300 hover:text-orange-200 member-action-ban hidden" title="Ban"><i class="fa-solid fa-ban text-[10px]"></i></button>
+                    <button onclick='moveGroupMember(<?= (int)$member->id ?>, <?= json_encode((string)$member->username, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>)' class="text-blue-300 hover:text-blue-200 member-action-move hidden" title="Move to another chat"><i class="fa-solid fa-arrow-right-arrow-left text-[10px]"></i></button>
                     <?php endif; ?>
                 </span>
             <?php endforeach; ?>
@@ -900,3 +902,95 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
 })();
 </script>
 <?php endif; ?>
+<script>
+(function() {
+    const perms = window.CURRENT_USER_PERMISSIONS || {};
+    const isAdmin = (window.CURRENT_USER_ROLE || '').toLowerCase() === 'admin';
+    const myPos = perms.highest_position || 0;
+
+    // Show/hide action buttons based on permissions
+    function updateMemberActions() {
+        document.querySelectorAll('[data-group-member-user-id]').forEach(chip => {
+            const kickBtn = chip.querySelector('.member-action-kick');
+            const banBtn = chip.querySelector('.member-action-ban');
+            const moveBtn = chip.querySelector('.member-action-move');
+
+            // For kick button: show if admin, owner, or has can_kick
+            if (kickBtn) {
+                const canKick = isAdmin || perms.can_kick;
+                kickBtn.classList.toggle('hidden', !canKick);
+            }
+            if (banBtn) {
+                const canBan = isAdmin || perms.can_ban;
+                banBtn.classList.toggle('hidden', !canBan);
+            }
+            if (moveBtn) {
+                const canMove = isAdmin || perms.can_move_users;
+                moveBtn.classList.toggle('hidden', !canMove);
+            }
+        });
+    }
+
+    // Ban user from chat
+    window.banGroupMember = async function(userId, username) {
+        if (!window.currentChat) return;
+        const reason = prompt(`Ban ${username} from this chat?\nOptional reason:`);
+        if (reason === null) return; // cancelled
+
+        const fd = new FormData();
+        fd.append('csrf_token', window.CSRF_TOKEN || getCsrfToken());
+        fd.append('chat_id', String(window.currentChat.id));
+        fd.append('user_id', String(userId));
+        fd.append('reason', reason || '');
+
+        try {
+            const res = await fetch('/admin/chat-bans/ban', { method: 'POST', body: fd });
+            const data = await res.json();
+            if (data.success) {
+                if (typeof showToast === 'function') showToast(`${username} has been banned`, 'success');
+                const chip = document.querySelector(`[data-group-member-user-id="${userId}"]`);
+                if (chip) chip.remove();
+            } else {
+                if (typeof showToast === 'function') showToast(data.error || 'Failed to ban user', 'error');
+                else alert(data.error || 'Failed to ban user');
+            }
+        } catch(e) {
+            if (typeof showToast === 'function') showToast('Network error', 'error');
+        }
+    };
+
+    // Move user to another chat
+    window.moveGroupMember = async function(userId, username) {
+        if (!window.currentChat) return;
+        const targetChatId = prompt(`Move ${username} to another chat.\nEnter target chat ID:`);
+        if (!targetChatId) return;
+
+        const fd = new FormData();
+        fd.append('csrf_token', window.CSRF_TOKEN || getCsrfToken());
+        fd.append('source_chat_id', String(window.currentChat.id));
+        fd.append('target_chat_id', targetChatId);
+        fd.append('user_id', String(userId));
+
+        try {
+            const res = await fetch('/chat/move-user', { method: 'POST', body: fd });
+            const data = await res.json();
+            if (data.success) {
+                if (typeof showToast === 'function') showToast(`${username} moved successfully`, 'success');
+                const chip = document.querySelector(`[data-group-member-user-id="${userId}"]`);
+                if (chip) chip.remove();
+            } else {
+                if (typeof showToast === 'function') showToast(data.error || 'Failed to move user', 'error');
+                else alert(data.error || 'Failed to move user');
+            }
+        } catch(e) {
+            if (typeof showToast === 'function') showToast('Network error', 'error');
+        }
+    };
+
+    document.addEventListener('DOMContentLoaded', updateMemberActions);
+    // Also run when chat view updates (MutationObserver on member list)
+    const obs = new MutationObserver(updateMemberActions);
+    const memberContainer = document.querySelector('.flex.flex-wrap.items-center.gap-2');
+    if (memberContainer) obs.observe(memberContainer, { childList: true });
+})();
+</script>

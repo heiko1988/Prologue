@@ -221,4 +221,46 @@ class Auth {
 
         return 'Unknown browser';
     }
+
+    public static function isAdmin($user = null): bool {
+        if ($user === null) {
+            $user = self::user();
+        }
+        if (!$user) {
+            return false;
+        }
+        return strtolower((string)($user->role ?? '')) === 'admin';
+    }
+
+    public static function hasPermission(string $permission, $user = null): bool {
+        if ($user === null) {
+            $user = self::user();
+        }
+        if (!$user) {
+            return false;
+        }
+        if (self::isAdmin($user)) {
+            return true;
+        }
+        if (!Role::supportsRoles() || !Role::supportsPermissions()) {
+            return false;
+        }
+        return Role::hasPermission((int)$user->id, $permission);
+    }
+
+    public static function canManageUser(int $targetId, $user = null): bool {
+        if ($user === null) {
+            $user = self::user();
+        }
+        if (!$user) {
+            return false;
+        }
+        if (self::isAdmin($user)) {
+            return true;
+        }
+        if (!Role::supportsRoles() || !Role::supportsPermissions()) {
+            return false;
+        }
+        return Role::canManageUser((int)$user->id, $targetId);
+    }
 }

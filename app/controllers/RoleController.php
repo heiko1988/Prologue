@@ -37,7 +37,13 @@ class RoleController extends Controller {
             $this->json(['error' => 'A role with this name already exists'], 409);
         }
 
-        $id = Role::create($name, $color, $description !== '' ? $description : null);
+        $position = (int)($_POST['position'] ?? 0);
+        $permissions = [];
+        foreach (['can_kick','can_ban','can_mute','can_pin','can_rename_chat','can_manage_channels','can_assign_roles','can_move_users'] as $p) {
+            $permissions[$p] = (int)($_POST[$p] ?? 0);
+        }
+
+        $id = Role::create($name, $color, $description !== '' ? $description : null, $position, $permissions);
         $role = Role::find($id);
 
         $this->json(['success' => true, 'role' => $role]);
@@ -74,7 +80,13 @@ class RoleController extends Controller {
             $this->json(['error' => 'A role with this name already exists'], 409);
         }
 
-        Role::update($id, $name, $color, $description !== '' ? $description : null);
+        $position = (int)($_POST['position'] ?? 0);
+        $permissions = [];
+        foreach (['can_kick','can_ban','can_mute','can_pin','can_rename_chat','can_manage_channels','can_assign_roles','can_move_users'] as $p) {
+            $permissions[$p] = (int)($_POST[$p] ?? 0);
+        }
+
+        Role::update($id, $name, $color, $description !== '' ? $description : null, $position, $permissions);
         $role = Role::find($id);
 
         $this->json(['success' => true, 'role' => $role]);
@@ -99,14 +111,27 @@ class RoleController extends Controller {
     }
 
     public function assign() {
-        $this->requireAdminUser();
+        Auth::requireAuth();
         Auth::csrfValidate();
+
+        $actorUser = Auth::user();
+        $isAdmin = Auth::isAdmin($actorUser);
 
         $userId = (int)($_POST['user_id'] ?? 0);
         $roleId = (int)($_POST['role_id'] ?? 0);
 
         if ($userId <= 0 || $roleId <= 0) {
             $this->json(['error' => 'Invalid user or role ID'], 400);
+        }
+
+        // Non-admin needs can_assign_roles + higher position than the role
+        if (!$isAdmin) {
+            if (!Auth::hasPermission('can_assign_roles', $actorUser)) {
+                $this->json(['error' => 'Access denied'], 403);
+            }
+            if (!Role::canManageRole((int)$actorUser->id, $roleId)) {
+                $this->json(['error' => 'You cannot assign a role at or above your own level'], 403);
+            }
         }
 
         $user = User::find($userId);
@@ -124,14 +149,27 @@ class RoleController extends Controller {
     }
 
     public function remove() {
-        $this->requireAdminUser();
+        Auth::requireAuth();
         Auth::csrfValidate();
+
+        $actorUser = Auth::user();
+        $isAdmin = Auth::isAdmin($actorUser);
 
         $userId = (int)($_POST['user_id'] ?? 0);
         $roleId = (int)($_POST['role_id'] ?? 0);
 
         if ($userId <= 0 || $roleId <= 0) {
             $this->json(['error' => 'Invalid user or role ID'], 400);
+        }
+
+        // Non-admin needs can_assign_roles + higher position than the role
+        if (!$isAdmin) {
+            if (!Auth::hasPermission('can_assign_roles', $actorUser)) {
+                $this->json(['error' => 'Access denied'], 403);
+            }
+            if (!Role::canManageRole((int)$actorUser->id, $roleId)) {
+                $this->json(['error' => 'You cannot remove a role at or above your own level'], 403);
+            }
         }
 
         Role::removeFromUser($userId, $roleId);
@@ -279,5 +317,83 @@ class RoleController extends Controller {
 
         $list = Role::getTempAccessListByUser($userId);
         $this->json(['temp_access' => $list]);
+    }
+
+    public function banFromChat() {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+
+        $actorUser = Auth::user();
+        $chatId = (int)($_POST['chat_id'] ?? 0);
+        $userId = (int)($_POST['user_id'] ?? 0);
+        $reason = trim((string)($_POST['reason'] ?? ''));
+
+        if ($chatId <= 0 || $userId <= 0) {
+            $this->json(['error' => 'Invalid payload'], 400);
+        }
+
+        // Self-ban prevention
+        if ((int)$actorUser->id === $userId) {
+            $this->json(['error' => 'You cannot ban yourself'], 403);
+        }
+
+        // Check can_ban permission + hierarchy
+        $isAdmin = Auth::isAdmin($actorUser);
+        if (!$isAdmin) {
+            if (!Auth::hasPermission('can_ban', $actorUser)) {
+                $this->json(['error' => 'You do not have permission to ban users'], 403);
+            }
+            if (!Auth::canManageUser($userId, $actorUser)) {
+                $this->json(['error' => 'You cannot ban a user with equal or higher role'], 403);
+            }
+        }
+
+        // Cannot ban the chat owner
+        $chat = Database::query("SELECT created_by FROM chats WHERE id = ?", [$chatId])->fetch();
+        if ($chat && (int)($chat->created_by ?? 0) === $userId) {
+            $this->json(['error' => 'Cannot ban the group owner'], 403);
+        }
+
+        Role::banUserFromChat($chatId, $userId, (int)$actorUser->id, $reason !== '' ? $reason : null);
+        $this->json(['success' => true]);
+    }
+
+    public function unbanFromChat() {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+
+        $actorUser = Auth::user();
+        $chatId = (int)($_POST['chat_id'] ?? 0);
+        $userId = (int)($_POST['user_id'] ?? 0);
+
+        if ($chatId <= 0 || $userId <= 0) {
+            $this->json(['error' => 'Invalid payload'], 400);
+        }
+
+        $isAdmin = Auth::isAdmin($actorUser);
+        if (!$isAdmin && !Auth::hasPermission('can_ban', $actorUser)) {
+            $this->json(['error' => 'You do not have permission to unban users'], 403);
+        }
+
+        Role::unbanUserFromChat($chatId, $userId);
+        $this->json(['success' => true]);
+    }
+
+    public function getChatBans() {
+        Auth::requireAuth();
+
+        $chatId = (int)($_GET['chat_id'] ?? 0);
+        if ($chatId <= 0) {
+            $this->json(['error' => 'Invalid chat ID'], 400);
+        }
+
+        $actorUser = Auth::user();
+        $isAdmin = Auth::isAdmin($actorUser);
+        if (!$isAdmin && !Auth::hasPermission('can_ban', $actorUser)) {
+            $this->json(['error' => 'Access denied'], 403);
+        }
+
+        $bans = Role::getChatBans($chatId);
+        $this->json(['bans' => $bans]);
     }
 }

@@ -825,6 +825,11 @@ class ChatController extends Controller {
             [$chatId, $targetUserId]
         )->fetch();
 
+        // Check if target is banned from this chat
+        if (Role::supportsPermissions() && Role::isUserBannedFromChat($chatId, $targetUserId)) {
+            $this->json(['error' => 'This user is banned from this chat'], 403);
+        }
+
         if (!$existingTargetMember) {
             $memberCount = (int)Database::query(
                 "SELECT COUNT(*) FROM chat_members WHERE chat_id = ?",
@@ -893,6 +898,20 @@ class ChatController extends Controller {
         $ownerUserId = (int)($chat->created_by ?? 0);
         if ($ownerUserId > 0 && $ownerUserId === $targetUserId) {
             $this->json(['error' => 'Group owner cannot be removed'], 403);
+        }
+
+        // Self-kick prevention
+        if ($currentUserId === $targetUserId) {
+            $this->json(['error' => 'You cannot remove yourself. Use "Leave Group" instead.'], 403);
+        }
+
+        // Permission check: Admin OR Owner OR (can_kick + higher position)
+        $isAdmin = Auth::isAdmin($authUser);
+        $isOwner = ($ownerUserId > 0 && $ownerUserId === $currentUserId);
+        if (!$isAdmin && !$isOwner) {
+            if (!Auth::hasPermission('can_kick', $authUser) || !Auth::canManageUser($targetUserId, $authUser)) {
+                $this->json(['error' => 'You do not have permission to remove this user'], 403);
+            }
         }
 
         $targetUser = Database::query(
@@ -1055,8 +1074,9 @@ class ChatController extends Controller {
             $this->json(['error' => 'Only group chats can be renamed'], 403);
         }
 
-        if ((int)($chat->created_by ?? 0) !== $currentUserId) {
-            $this->json(['error' => 'Only the group owner can rename this chat'], 403);
+        $isOwner = ((int)($chat->created_by ?? 0) === $currentUserId);
+        if (!$isOwner && !Auth::isAdmin() && !Auth::hasPermission('can_rename_chat')) {
+            $this->json(['error' => 'You do not have permission to rename this chat'], 403);
         }
 
         $member = Database::query("SELECT id FROM chat_members WHERE chat_id = ? AND user_id = ?", [$chatId, $currentUserId])->fetch();
@@ -1122,15 +1142,16 @@ class ChatController extends Controller {
             $this->json(['error' => 'Only group chats can be deleted'], 403);
         }
 
-        if ((int)($chat->created_by ?? 0) !== $currentUserId) {
-            $this->json(['error' => 'Only the group owner can delete this group'], 403);
+        $isOwner = ((int)($chat->created_by ?? 0) === $currentUserId);
+        if (!$isOwner && !Auth::isAdmin() && !Auth::hasPermission('can_manage_channels')) {
+            $this->json(['error' => 'You do not have permission to delete this group'], 403);
         }
 
         $member = Database::query(
             "SELECT id FROM chat_members WHERE chat_id = ? AND user_id = ? LIMIT 1",
             [$chatId, $currentUserId]
         )->fetch();
-        if (!$member) {
+        if (!$member && !Auth::isAdmin()) {
             $this->json(['error' => 'Access denied'], 403);
         }
 
@@ -1354,5 +1375,71 @@ class ChatController extends Controller {
         }
 
         return array_keys($ids);
+    }
+
+    public function moveUserToChat() {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+
+        $actorUser = Auth::user();
+        $sourceChatId = (int)($_POST['source_chat_id'] ?? 0);
+        $targetChatId = (int)($_POST['target_chat_id'] ?? 0);
+        $targetUserId = (int)($_POST['user_id'] ?? 0);
+
+        if ($sourceChatId <= 0 || $targetChatId <= 0 || $targetUserId <= 0) {
+            $this->json(['error' => 'Invalid payload'], 400);
+        }
+
+        if ($sourceChatId === $targetChatId) {
+            $this->json(['error' => 'Source and target chat are the same'], 400);
+        }
+
+        // Self-move prevention
+        if ((int)$actorUser->id === $targetUserId) {
+            $this->json(['error' => 'You cannot move yourself'], 403);
+        }
+
+        // Permission check
+        $isAdmin = Auth::isAdmin($actorUser);
+        if (!$isAdmin) {
+            if (!Auth::hasPermission('can_move_users', $actorUser)) {
+                $this->json(['error' => 'You do not have permission to move users'], 403);
+            }
+            if (!Auth::canManageUser($targetUserId, $actorUser)) {
+                $this->json(['error' => 'You cannot move a user with equal or higher role'], 403);
+            }
+        }
+
+        // Validate both chats exist and are group type
+        $sourceChat = Database::query("SELECT id, type, created_by FROM chats WHERE id = ?", [$sourceChatId])->fetch();
+        $targetChat = Database::query("SELECT id, type FROM chats WHERE id = ?", [$targetChatId])->fetch();
+        if (!$sourceChat || !$targetChat) {
+            $this->json(['error' => 'Chat not found'], 404);
+        }
+        if (!Chat::isGroupType($sourceChat->type ?? null) || !Chat::isGroupType($targetChat->type ?? null)) {
+            $this->json(['error' => 'Both chats must be group chats'], 403);
+        }
+
+        // Cannot move the chat owner
+        if ((int)($sourceChat->created_by ?? 0) === $targetUserId) {
+            $this->json(['error' => 'Cannot move the group owner'], 403);
+        }
+
+        // Check user is member of source chat
+        $member = Database::query("SELECT id FROM chat_members WHERE chat_id = ? AND user_id = ?", [$sourceChatId, $targetUserId])->fetch();
+        if (!$member) {
+            $this->json(['error' => 'User is not in the source chat'], 404);
+        }
+
+        // Check ban on target chat
+        if (Role::supportsPermissions() && Role::isUserBannedFromChat($targetChatId, $targetUserId)) {
+            $this->json(['error' => 'User is banned from the target chat'], 403);
+        }
+
+        // Remove from source, add to target
+        Database::query("DELETE FROM chat_members WHERE chat_id = ? AND user_id = ?", [$sourceChatId, $targetUserId]);
+        Database::query("INSERT IGNORE INTO chat_members (chat_id, user_id) VALUES (?, ?)", [$targetChatId, $targetUserId]);
+
+        $this->json(['success' => true]);
     }
 }

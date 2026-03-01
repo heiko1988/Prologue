@@ -637,7 +637,21 @@
                     <label class="text-xs text-zinc-400 block mb-1">Description</label>
                     <input type="text" id="role-create-description" maxlength="255" placeholder="Optional description" class="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm w-56">
                 </div>
+                <div>
+                    <label class="text-xs text-zinc-400 block mb-1">Position</label>
+                    <input type="number" id="role-create-position" min="0" max="999" value="0" class="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm w-20">
+                </div>
                 <button type="button" onclick="createRole()" class="bg-emerald-700 hover:bg-emerald-600 text-white text-sm px-4 py-2 rounded-lg">Create</button>
+            </div>
+            <div class="flex flex-wrap gap-3 mt-3">
+                <label class="text-xs text-zinc-300 flex items-center gap-1"><input type="checkbox" id="role-create-can_kick" class="rounded"> Kick</label>
+                <label class="text-xs text-zinc-300 flex items-center gap-1"><input type="checkbox" id="role-create-can_ban" class="rounded"> Ban</label>
+                <label class="text-xs text-zinc-300 flex items-center gap-1"><input type="checkbox" id="role-create-can_mute" class="rounded"> Mute</label>
+                <label class="text-xs text-zinc-300 flex items-center gap-1"><input type="checkbox" id="role-create-can_pin" class="rounded"> Pin</label>
+                <label class="text-xs text-zinc-300 flex items-center gap-1"><input type="checkbox" id="role-create-can_rename_chat" class="rounded"> Rename Chat</label>
+                <label class="text-xs text-zinc-300 flex items-center gap-1"><input type="checkbox" id="role-create-can_manage_channels" class="rounded"> Manage Channels</label>
+                <label class="text-xs text-zinc-300 flex items-center gap-1"><input type="checkbox" id="role-create-can_assign_roles" class="rounded"> Assign Roles</label>
+                <label class="text-xs text-zinc-300 flex items-center gap-1"><input type="checkbox" id="role-create-can_move_users" class="rounded"> Move Users</label>
             </div>
         </div>
     </section>
@@ -653,13 +667,32 @@
                         <label class="text-xs text-zinc-400 block mb-1">Name</label>
                         <input type="text" id="role-edit-name" maxlength="50" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm">
                     </div>
-                    <div>
-                        <label class="text-xs text-zinc-400 block mb-1">Color</label>
-                        <input type="color" id="role-edit-color" class="bg-zinc-800 border border-zinc-700 rounded-lg w-10 h-9 cursor-pointer">
+                    <div class="flex gap-3">
+                        <div>
+                            <label class="text-xs text-zinc-400 block mb-1">Color</label>
+                            <input type="color" id="role-edit-color" class="bg-zinc-800 border border-zinc-700 rounded-lg w-10 h-9 cursor-pointer">
+                        </div>
+                        <div>
+                            <label class="text-xs text-zinc-400 block mb-1">Position</label>
+                            <input type="number" id="role-edit-position" min="0" max="999" class="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm w-20">
+                        </div>
                     </div>
                     <div>
                         <label class="text-xs text-zinc-400 block mb-1">Description</label>
                         <input type="text" id="role-edit-description" maxlength="255" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="text-xs text-zinc-400 block mb-1">Permissions</label>
+                        <div class="flex flex-wrap gap-3">
+                            <label class="text-xs text-zinc-300 flex items-center gap-1"><input type="checkbox" id="role-edit-can_kick" class="rounded"> Kick</label>
+                            <label class="text-xs text-zinc-300 flex items-center gap-1"><input type="checkbox" id="role-edit-can_ban" class="rounded"> Ban</label>
+                            <label class="text-xs text-zinc-300 flex items-center gap-1"><input type="checkbox" id="role-edit-can_mute" class="rounded"> Mute</label>
+                            <label class="text-xs text-zinc-300 flex items-center gap-1"><input type="checkbox" id="role-edit-can_pin" class="rounded"> Pin</label>
+                            <label class="text-xs text-zinc-300 flex items-center gap-1"><input type="checkbox" id="role-edit-can_rename_chat" class="rounded"> Rename Chat</label>
+                            <label class="text-xs text-zinc-300 flex items-center gap-1"><input type="checkbox" id="role-edit-can_manage_channels" class="rounded"> Manage Channels</label>
+                            <label class="text-xs text-zinc-300 flex items-center gap-1"><input type="checkbox" id="role-edit-can_assign_roles" class="rounded"> Assign Roles</label>
+                            <label class="text-xs text-zinc-300 flex items-center gap-1"><input type="checkbox" id="role-edit-can_move_users" class="rounded"> Move Users</label>
+                        </div>
                     </div>
                 </div>
                 <div class="mt-5 flex items-center justify-end gap-3">
@@ -679,21 +712,26 @@
             list.innerHTML = '<p class="text-zinc-400 text-sm">No roles created yet.</p>';
             return;
         }
-        list.innerHTML = data.roles.map(r => `
+        const permLabels = {can_kick:'Kick',can_ban:'Ban',can_mute:'Mute',can_pin:'Pin',can_rename_chat:'Rename',can_manage_channels:'Channels',can_assign_roles:'Roles',can_move_users:'Move'};
+        list.innerHTML = data.roles.map(r => {
+            const permChips = Object.entries(permLabels).filter(([k]) => r[k]).map(([,v]) => `<span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-900 text-emerald-300">${v}</span>`).join('');
+            const posLabel = r.position !== undefined ? `<span class="text-[10px] px-1.5 py-0.5 rounded bg-zinc-700 text-zinc-300">Pos: ${r.position}</span>` : '';
+            return `
             <div class="bg-zinc-800 rounded-xl p-3 flex items-center justify-between gap-3" data-role-id="${r.id}">
                 <div class="flex items-center gap-3 min-w-0">
                     <span class="inline-block w-3 h-3 rounded-full shrink-0" style="background:${r.color}"></span>
                     <div class="min-w-0">
-                        <div class="font-medium">${escapeHtml(r.name)}</div>
+                        <div class="font-medium flex items-center gap-2">${escapeHtml(r.name)} ${posLabel}</div>
                         ${r.description ? `<div class="text-xs text-zinc-400">${escapeHtml(r.description)}</div>` : ''}
+                        ${permChips ? `<div class="flex flex-wrap gap-1 mt-1">${permChips}</div>` : ''}
                     </div>
                 </div>
                 <div class="flex gap-2 shrink-0">
-                    <button onclick="openRoleEditModal(${r.id}, '${escapeHtml(r.name)}', '${r.color}', '${escapeHtml(r.description || '')}')" class="bg-zinc-700 hover:bg-zinc-600 text-sm px-3 py-1.5 rounded-lg">Edit</button>
+                    <button onclick='openRoleEditModal(${JSON.stringify(r)})' class="bg-zinc-700 hover:bg-zinc-600 text-sm px-3 py-1.5 rounded-lg">Edit</button>
                     <button onclick="deleteRole(${r.id}, '${escapeHtml(r.name)}')" class="bg-red-700 hover:bg-red-600 text-red-100 text-sm px-3 py-1.5 rounded-lg">Delete</button>
                 </div>
-            </div>
-        `).join('');
+            </div>`;
+        }).join('');
     }
 
     function escapeHtml(s) {
@@ -713,6 +751,13 @@
         fd.append('name', name);
         fd.append('color', color);
         fd.append('description', description);
+        const posEl = document.getElementById('role-create-position');
+        fd.append('position', posEl ? posEl.value : '0');
+        const perms = ['can_kick','can_ban','can_mute','can_pin','can_rename_chat','can_manage_channels','can_assign_roles','can_move_users'];
+        perms.forEach(p => {
+            const el = document.getElementById('role-create-' + p);
+            fd.append(p, el && el.checked ? '1' : '0');
+        });
 
         const res = await fetch('/admin/roles/create', { method: 'POST', body: fd });
         const data = await res.json();
@@ -720,14 +765,23 @@
 
         document.getElementById('role-create-name').value = '';
         document.getElementById('role-create-description').value = '';
+        if (posEl) posEl.value = '0';
+        perms.forEach(p => { const el = document.getElementById('role-create-' + p); if (el) el.checked = false; });
         loadRoles();
     }
 
-    function openRoleEditModal(id, name, color, description) {
-        document.getElementById('role-edit-id').value = id;
-        document.getElementById('role-edit-name').value = name;
-        document.getElementById('role-edit-color').value = color;
-        document.getElementById('role-edit-description').value = description;
+    function openRoleEditModal(role) {
+        document.getElementById('role-edit-id').value = role.id;
+        document.getElementById('role-edit-name').value = role.name;
+        document.getElementById('role-edit-color').value = role.color;
+        document.getElementById('role-edit-description').value = role.description || '';
+        const posEl = document.getElementById('role-edit-position');
+        if (posEl) posEl.value = role.position || 0;
+        const perms = ['can_kick','can_ban','can_mute','can_pin','can_rename_chat','can_manage_channels','can_assign_roles','can_move_users'];
+        perms.forEach(p => {
+            const el = document.getElementById('role-edit-' + p);
+            if (el) el.checked = !!role[p];
+        });
         document.getElementById('role-edit-modal').classList.remove('hidden');
     }
 
@@ -748,6 +802,13 @@
         fd.append('name', name);
         fd.append('color', color);
         fd.append('description', description);
+        const posEl = document.getElementById('role-edit-position');
+        fd.append('position', posEl ? posEl.value : '0');
+        const perms = ['can_kick','can_ban','can_mute','can_pin','can_rename_chat','can_manage_channels','can_assign_roles','can_move_users'];
+        perms.forEach(p => {
+            const el = document.getElementById('role-edit-' + p);
+            fd.append(p, el && el.checked ? '1' : '0');
+        });
 
         const res = await fetch('/admin/roles/update', { method: 'POST', body: fd });
         const data = await res.json();

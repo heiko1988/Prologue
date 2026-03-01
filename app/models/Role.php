@@ -1,7 +1,31 @@
 <?php
 class Role extends Model {
 
+    private static array $permissionColumns = [
+        'can_kick', 'can_ban', 'can_mute', 'can_pin',
+        'can_rename_chat', 'can_manage_channels', 'can_assign_roles', 'can_move_users'
+    ];
+
+    public static function supportsPermissions(): bool {
+        static $supports = null;
+        if ($supports !== null) {
+            return $supports;
+        }
+        try {
+            $result = self::query(
+                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'roles' AND COLUMN_NAME = 'position'"
+            )->fetchColumn();
+            $supports = ((int)$result) > 0;
+        } catch (Throwable $e) {
+            $supports = false;
+        }
+        return $supports;
+    }
+
     public static function all() {
+        if (self::supportsPermissions()) {
+            return self::query("SELECT * FROM roles ORDER BY position DESC, name ASC")->fetchAll();
+        }
         return self::query("SELECT * FROM roles ORDER BY name ASC")->fetchAll();
     }
 
@@ -13,26 +37,161 @@ class Role extends Model {
         return self::query("SELECT * FROM roles WHERE name = ?", [trim((string)$name)])->fetch();
     }
 
-    public static function create($name, $color = '#6b7280', $description = null) {
-        self::query(
-            "INSERT INTO roles (name, color, description) VALUES (?, ?, ?)",
-            [trim((string)$name), trim((string)$color), $description !== null ? trim((string)$description) : null]
-        );
+    public static function create($name, $color = '#6b7280', $description = null, $position = 0, $permissions = []) {
+        if (self::supportsPermissions()) {
+            $cols = 'name, color, description, position';
+            $vals = '?, ?, ?, ?';
+            $params = [
+                trim((string)$name),
+                trim((string)$color),
+                $description !== null ? trim((string)$description) : null,
+                (int)$position
+            ];
+            foreach (self::$permissionColumns as $perm) {
+                $cols .= ', ' . $perm;
+                $vals .= ', ?';
+                $params[] = !empty($permissions[$perm]) ? 1 : 0;
+            }
+            self::query("INSERT INTO roles ({$cols}) VALUES ({$vals})", $params);
+        } else {
+            self::query(
+                "INSERT INTO roles (name, color, description) VALUES (?, ?, ?)",
+                [trim((string)$name), trim((string)$color), $description !== null ? trim((string)$description) : null]
+            );
+        }
         return (int)self::db()->lastInsertId();
     }
 
-    public static function update($id, $name, $color, $description = null) {
-        self::query(
-            "UPDATE roles SET name = ?, color = ?, description = ? WHERE id = ?",
-            [trim((string)$name), trim((string)$color), $description !== null ? trim((string)$description) : null, (int)$id]
-        );
+    public static function update($id, $name, $color, $description = null, $position = null, $permissions = []) {
+        if (self::supportsPermissions() && $position !== null) {
+            $sql = "UPDATE roles SET name = ?, color = ?, description = ?, position = ?";
+            $params = [
+                trim((string)$name),
+                trim((string)$color),
+                $description !== null ? trim((string)$description) : null,
+                (int)$position
+            ];
+            foreach (self::$permissionColumns as $perm) {
+                $sql .= ", {$perm} = ?";
+                $params[] = !empty($permissions[$perm]) ? 1 : 0;
+            }
+            $sql .= " WHERE id = ?";
+            $params[] = (int)$id;
+            self::query($sql, $params);
+        } else {
+            self::query(
+                "UPDATE roles SET name = ?, color = ?, description = ? WHERE id = ?",
+                [trim((string)$name), trim((string)$color), $description !== null ? trim((string)$description) : null, (int)$id]
+            );
+        }
     }
 
     public static function delete($id) {
         self::query("DELETE FROM roles WHERE id = ?", [(int)$id]);
     }
 
+    // ---- Hierarchy & Permission Methods ----
+
+    public static function getHighestUserPosition(int $userId): int {
+        if (!self::supportsPermissions()) {
+            return 0;
+        }
+        $result = self::query(
+            "SELECT MAX(r.position) FROM roles r JOIN user_roles ur ON ur.role_id = r.id WHERE ur.user_id = ?",
+            [$userId]
+        )->fetchColumn();
+        return (int)($result ?? 0);
+    }
+
+    public static function canManageRole(int $actorId, int $roleId): bool {
+        if (!self::supportsPermissions()) {
+            return false;
+        }
+        $role = self::find($roleId);
+        if (!$role) {
+            return false;
+        }
+        $actorPos = self::getHighestUserPosition($actorId);
+        return $actorPos > (int)($role->position ?? 0);
+    }
+
+    public static function canManageUser(int $actorId, int $targetId): bool {
+        if ($actorId === $targetId) {
+            return false;
+        }
+        if (!self::supportsPermissions()) {
+            return false;
+        }
+        $actorPos = self::getHighestUserPosition($actorId);
+        $targetPos = self::getHighestUserPosition($targetId);
+        return $actorPos > $targetPos;
+    }
+
+    public static function hasPermission(int $userId, string $permission): bool {
+        if (!self::supportsPermissions()) {
+            return false;
+        }
+        if (!in_array($permission, self::$permissionColumns, true)) {
+            return false;
+        }
+        $result = self::query(
+            "SELECT MAX(r.{$permission}) FROM roles r JOIN user_roles ur ON ur.role_id = r.id WHERE ur.user_id = ?",
+            [$userId]
+        )->fetchColumn();
+        return ((int)($result ?? 0)) > 0;
+    }
+
+    // ---- Chat Bans ----
+
+    public static function isUserBannedFromChat(int $chatId, int $userId): bool {
+        $row = self::query(
+            "SELECT id FROM chat_bans WHERE chat_id = ? AND user_id = ? LIMIT 1",
+            [$chatId, $userId]
+        )->fetch();
+        return (bool)$row;
+    }
+
+    public static function banUserFromChat(int $chatId, int $userId, int $bannedBy, ?string $reason = null): void {
+        self::query(
+            "INSERT INTO chat_bans (chat_id, user_id, banned_by, reason) VALUES (?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE banned_by = VALUES(banned_by), reason = VALUES(reason), created_at = CURRENT_TIMESTAMP",
+            [$chatId, $userId, $bannedBy, $reason]
+        );
+        // Remove from chat members
+        self::query(
+            "DELETE FROM chat_members WHERE chat_id = ? AND user_id = ?",
+            [$chatId, $userId]
+        );
+    }
+
+    public static function unbanUserFromChat(int $chatId, int $userId): void {
+        self::query(
+            "DELETE FROM chat_bans WHERE chat_id = ? AND user_id = ?",
+            [$chatId, $userId]
+        );
+    }
+
+    public static function getChatBans(int $chatId): array {
+        return self::query(
+            "SELECT cb.*, u.username, u.user_number, b.username AS banned_by_username
+             FROM chat_bans cb
+             JOIN users u ON u.id = cb.user_id
+             LEFT JOIN users b ON b.id = cb.banned_by
+             WHERE cb.chat_id = ?
+             ORDER BY cb.created_at DESC",
+            [$chatId]
+        )->fetchAll();
+    }
+
+    // ---- Existing methods (unchanged) ----
+
     public static function getUserRoles($userId) {
+        if (self::supportsPermissions()) {
+            return self::query(
+                "SELECT r.* FROM roles r JOIN user_roles ur ON ur.role_id = r.id WHERE ur.user_id = ? ORDER BY r.position DESC, r.name ASC",
+                [(int)$userId]
+            )->fetchAll();
+        }
         return self::query(
             "SELECT r.* FROM roles r JOIN user_roles ur ON ur.role_id = r.id WHERE ur.user_id = ? ORDER BY r.name ASC",
             [(int)$userId]
@@ -49,7 +208,6 @@ class Role extends Model {
             "INSERT IGNORE INTO user_roles (user_id, role_id) VALUES (?, ?)",
             [(int)$userId, (int)$roleId]
         );
-        // Auto-add user to all group chats that require this role
         self::syncUserToChatsForRole((int)$userId, (int)$roleId);
     }
 
@@ -58,7 +216,6 @@ class Role extends Model {
             "DELETE FROM user_roles WHERE user_id = ? AND role_id = ?",
             [(int)$userId, (int)$roleId]
         );
-        // Remove user from chats they no longer have role access to
         self::removeUserFromChatsForRole((int)$userId, (int)$roleId);
     }
 
@@ -94,7 +251,6 @@ class Role extends Model {
             [$roleId]
         )->fetchAll();
         foreach ($chats as $chat) {
-            // Don't remove if user has temp access or is chat owner
             if (self::hasTempAccess((int)$chat->id, $userId)) {
                 continue;
             }
@@ -125,7 +281,6 @@ class Role extends Model {
             self::query("UPDATE chats SET required_role_id = NULL WHERE id = ?", [(int)$chatId]);
         } else {
             self::query("UPDATE chats SET required_role_id = ? WHERE id = ?", [(int)$roleId, (int)$chatId]);
-            // Auto-add all users with this role to the chat
             self::syncAllUsersToChat((int)$chatId, (int)$roleId);
         }
     }

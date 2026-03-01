@@ -22,6 +22,11 @@ class UpdateController extends Controller {
                 "CREATE TABLE IF NOT EXISTS chat_temp_access (id INT AUTO_INCREMENT PRIMARY KEY, chat_id INT NOT NULL, user_id INT NOT NULL, granted_by INT DEFAULT NULL, expires_at DATETIME DEFAULT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY uq_chat_temp_access (chat_id, user_id), FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE CASCADE, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY (granted_by) REFERENCES users(id) ON DELETE SET NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
                 "ALTER TABLE chats ADD COLUMN required_role_id INT DEFAULT NULL, ADD CONSTRAINT fk_chats_required_role FOREIGN KEY (required_role_id) REFERENCES roles(id) ON DELETE SET NULL",
             ],
+            '0.1.1' => [
+                "ALTER TABLE roles ADD COLUMN position INT NOT NULL DEFAULT 0 AFTER description, ADD COLUMN can_kick TINYINT(1) NOT NULL DEFAULT 0, ADD COLUMN can_ban TINYINT(1) NOT NULL DEFAULT 0, ADD COLUMN can_mute TINYINT(1) NOT NULL DEFAULT 0, ADD COLUMN can_pin TINYINT(1) NOT NULL DEFAULT 0, ADD COLUMN can_rename_chat TINYINT(1) NOT NULL DEFAULT 0, ADD COLUMN can_manage_channels TINYINT(1) NOT NULL DEFAULT 0, ADD COLUMN can_assign_roles TINYINT(1) NOT NULL DEFAULT 0, ADD COLUMN can_move_users TINYINT(1) NOT NULL DEFAULT 0",
+                "CREATE TABLE IF NOT EXISTS chat_bans (id INT AUTO_INCREMENT PRIMARY KEY, chat_id INT NOT NULL, user_id INT NOT NULL, banned_by INT DEFAULT NULL, reason VARCHAR(255) DEFAULT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY uq_chat_ban (chat_id, user_id), FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE CASCADE, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY (banned_by) REFERENCES users(id) ON DELETE SET NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+                "ALTER TABLE roles ADD INDEX idx_roles_position (position DESC)",
+            ],
         ];
     }
 

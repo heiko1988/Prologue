@@ -658,6 +658,11 @@ class ApiController extends Controller {
             $this->json(['error' => 'Access denied'], 403);
         }
 
+        // Permission check: Admin or can_pin
+        if (!Auth::isAdmin() && !Auth::hasPermission('can_pin')) {
+            $this->json(['error' => 'You do not have permission to pin messages'], 403);
+        }
+
         if ($this->supportsChatSoftDelete()) {
             $chat = Database::query("SELECT id, deleted_at FROM chats WHERE id = ?", [$chatId])->fetch();
             if (!$chat || $this->chatIsSoftDeleted($chat)) {
@@ -706,6 +711,11 @@ class ApiController extends Controller {
         $member = Database::query("SELECT id FROM chat_members WHERE chat_id = ? AND user_id = ?", [$chatId, $userId])->fetch();
         if (!$member) {
             $this->json(['error' => 'Access denied'], 403);
+        }
+
+        // Permission check: Admin or can_pin
+        if (!Auth::isAdmin() && !Auth::hasPermission('can_pin')) {
+            $this->json(['error' => 'You do not have permission to unpin messages'], 403);
         }
 
         if ($this->supportsChatSoftDelete()) {
