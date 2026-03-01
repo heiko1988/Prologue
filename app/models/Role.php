@@ -220,10 +220,18 @@ class Role extends Model {
     }
 
     public static function syncUserToChatsForRole(int $userId, int $roleId): void {
-        $chats = self::query(
-            "SELECT id FROM chats WHERE required_role_id = ? AND type = 'group'",
-            [$roleId]
-        )->fetchAll();
+        // Find all chats that require this role (using new multi-role table or legacy column)
+        if (self::supportsChatRequiredRoles()) {
+            $chats = self::query(
+                "SELECT DISTINCT crr.chat_id AS id FROM chat_required_roles crr JOIN chats c ON c.id = crr.chat_id WHERE crr.role_id = ? AND c.type = 'group'",
+                [$roleId]
+            )->fetchAll();
+        } else {
+            $chats = self::query(
+                "SELECT id FROM chats WHERE required_role_id = ? AND type = 'group'",
+                [$roleId]
+            )->fetchAll();
+        }
         foreach ($chats as $chat) {
             self::query(
                 "INSERT IGNORE INTO chat_members (chat_id, user_id) VALUES (?, ?)",
@@ -246,24 +254,42 @@ class Role extends Model {
     }
 
     public static function removeUserFromChatsForRole(int $userId, int $roleId): void {
-        $chats = self::query(
-            "SELECT id FROM chats WHERE required_role_id = ? AND type = 'group'",
-            [$roleId]
-        )->fetchAll();
+        // Find all chats that require this role (using new multi-role table or legacy column)
+        if (self::supportsChatRequiredRoles()) {
+            $chats = self::query(
+                "SELECT DISTINCT crr.chat_id AS id FROM chat_required_roles crr JOIN chats c ON c.id = crr.chat_id WHERE crr.role_id = ? AND c.type = 'group'",
+                [$roleId]
+            )->fetchAll();
+        } else {
+            $chats = self::query(
+                "SELECT id FROM chats WHERE required_role_id = ? AND type = 'group'",
+                [$roleId]
+            )->fetchAll();
+        }
+
         foreach ($chats as $chat) {
-            if (self::hasTempAccess((int)$chat->id, $userId)) {
+            $chatId = (int)$chat->id;
+
+            // Skip if user has temp access
+            if (self::hasTempAccess($chatId, $userId)) {
                 continue;
             }
+            // Skip if user is chat owner
             $isOwner = (int)self::query(
                 "SELECT COUNT(*) FROM chats WHERE id = ? AND created_by = ?",
-                [(int)$chat->id, $userId]
+                [$chatId, $userId]
             )->fetchColumn();
             if ($isOwner > 0) {
                 continue;
             }
+            // KEY FIX: Check if user still has ANOTHER role that grants access to this chat
+            if (self::userHasAnyChatRole($userId, $chatId)) {
+                continue;
+            }
+            // User has no remaining access — remove from chat
             self::query(
                 "DELETE FROM chat_members WHERE chat_id = ? AND user_id = ?",
-                [(int)$chat->id, $userId]
+                [$chatId, $userId]
             );
         }
     }
