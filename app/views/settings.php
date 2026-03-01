@@ -375,7 +375,7 @@
         </div>
         <p id="notification-settings-status" class="mt-3 text-xs text-zinc-500" aria-live="polite"></p>
     </section>
-    <section class=bg-zinc-900 border border-zinc-700 rounded-2xl p-6 w-full>
+    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 w-full">
         <h2 class="text-xl font-semibold mb-4">Media Devices</h2>
         <p class="text-sm text-zinc-400 mb-5">Select which camera and microphone to use for calls. Changes save automatically.</p>
         <div class="space-y-4" id="media-device-settings">
