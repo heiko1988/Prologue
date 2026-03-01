@@ -1,14 +1,27 @@
 // Extracted from app.js for feature-focused organization.
 
-// ── Media device helpers (device selection from Settings) ────────────────────
-function getPrefMicConstraint() {
-    const id = localStorage.getItem('prologue.selectedMicId');
-    return id ? { deviceId: { ideal: id } } : true;
+// ── Media device helpers (device selection from Settings) ────────────────────────────
+async function getUserMediaMic(extra) {
+    extra = extra || {};
+    var id = localStorage.getItem('prologue.selectedMicId');
+    if (id) {
+        try {
+            return await navigator.mediaDevices.getUserMedia(Object.assign({}, extra, { audio: { deviceId: { exact: id } } }));
+        } catch (e) { /* device not available, fall back to default */ }
+    }
+    return await navigator.mediaDevices.getUserMedia(Object.assign({}, extra, { audio: true }));
 }
-function getPrefCamConstraint() {
-    const id = localStorage.getItem('prologue.selectedCamId');
-    return id ? { deviceId: { ideal: id } } : true;
+async function getUserMediaCam(extra) {
+    extra = extra || {};
+    var id = localStorage.getItem('prologue.selectedCamId');
+    if (id) {
+        try {
+            return await navigator.mediaDevices.getUserMedia(Object.assign({}, extra, { video: { deviceId: { exact: id } } }));
+        } catch (e) { /* device not available, fall back to default */ }
+    }
+    return await navigator.mediaDevices.getUserMedia(Object.assign({}, extra, { video: true }));
 }
+
 
 
 // ── Speaking detection state ──────────────────────────────────────────────────
@@ -924,7 +937,7 @@ async function startVoiceCall(options = {}) {
         setChatCallStatusBar('ringing');
         syncCallRingingState({ state: 'ringing', callId: Number(currentCallId || 0), ringingDirection: 'outgoing', incomingAlert: false });
     }
-    localStream = await navigator.mediaDevices.getUserMedia({ audio: getPrefMicConstraint(), video: false });
+    localStream = await getUserMediaMic({ video: false });
     bindCallAudioUnlockHandlers();
     startLocalSpeakingDetection();
     const localVideo = document.getElementById('local-video');
@@ -1069,7 +1082,7 @@ async function toggleVideoInCall() {
 
     if (!isVideoEnabled) {
         try {
-            const cameraStream = await navigator.mediaDevices.getUserMedia({ video: getPrefCamConstraint() });
+            const cameraStream = await getUserMediaCam();
             const videoTrack = cameraStream.getVideoTracks()[0];
             if (!videoTrack) return;
 
@@ -1508,7 +1521,7 @@ async function stopScreenShare(restoreCamera = true) {
 
     if (restoreCamera && isVideoEnabled && localStream) {
         try {
-            const cameraStream = await navigator.mediaDevices.getUserMedia({ video: getPrefCamConstraint() });
+            const cameraStream = await getUserMediaCam();
             const cameraTrack = cameraStream.getVideoTracks()[0];
             if (cameraTrack) {
                 localStream.getVideoTracks().forEach(t => { t.stop(); localStream.removeTrack(t); });
