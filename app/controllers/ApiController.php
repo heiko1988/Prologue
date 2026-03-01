@@ -493,23 +493,23 @@ class ApiController extends Controller {
         $filteredChats = [];
         foreach ($chats as $chat) {
             if ($rolesSupported) {
-                // Fetch required_role_id for this chat
-                $chatRow = Database::query("SELECT required_role_id FROM chats WHERE id = ?", [(int)$chat->id])->fetch();
-                $chat->required_role_id = $chatRow ? (int)($chatRow->required_role_id ?? 0) : 0;
+                $chatRoles = Role::getChatRequiredRoles((int)$chat->id);
+                $chat->required_roles = array_map(fn($r) => ['id' => (int)$r->id, 'name' => $r->name, 'color' => $r->color], $chatRoles);
 
-                if ($chat->required_role_id > 0) {
-                    $fullChat = (object)['id' => $chat->id, 'type' => $chat->type, 'required_role_id' => $chat->required_role_id];
+                if (!empty($chatRoles)) {
+                    $fullChat = (object)['id' => $chat->id, 'type' => $chat->type, 'required_role_id' => (int)$chatRoles[0]->id];
                     if (!Auth::canAccessChat($authUser, $fullChat)) {
                         continue;
                     }
-                    $roleInfo = Role::find($chat->required_role_id);
-                    $chat->required_role_name = $roleInfo ? $roleInfo->name : null;
-                    $chat->required_role_color = $roleInfo ? $roleInfo->color : null;
+                    // Legacy compat
+                    $chat->required_role_name = $chatRoles[0]->name;
+                    $chat->required_role_color = $chatRoles[0]->color;
                 } else {
                     $chat->required_role_name = null;
                     $chat->required_role_color = null;
                 }
             } else {
+                $chat->required_roles = [];
                 $chat->required_role_name = null;
                 $chat->required_role_color = null;
             }
