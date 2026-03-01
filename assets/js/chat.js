@@ -1886,7 +1886,9 @@ function bindAddUserModal() {
 }
 
 // ===== Message Edit & Delete =====
-async function editMessage(msgId) {
+let editingMessageId = null;
+
+function editMessage(msgId) {
     const msgEl = document.querySelector('[data-message-id="' + msgId + '"]');
     if (!msgEl) return;
     const contentEl = msgEl.querySelector('.js-message-content');
@@ -1894,19 +1896,58 @@ async function editMessage(msgId) {
     const rawContent = contentEl.getAttribute('data-raw-content') || contentEl.textContent.trim();
     const cleanContent = rawContent.replace(/\s*\(edited\)\s*$/, '').trim();
 
-    const newContent = prompt('Edit message:', cleanContent);
-    if (newContent === null || newContent.trim() === '' || newContent.trim() === cleanContent) return;
+    const input = document.getElementById('message-input');
+    if (!input) return;
 
-    const result = await postForm('/api/messages/edit', {
-        csrf_token: getCsrfToken(),
-        message_id: String(msgId),
-        content: newContent.trim()
-    });
-    if (result.success) {
-        showToast('Message edited', 'success');
-    } else {
-        showToast(result.error || 'Failed to edit message', 'error');
+    // Store edit state
+    editingMessageId = msgId;
+    input.value = cleanContent;
+    input.focus();
+
+    // Show edit indicator
+    showEditIndicator(msgId, cleanContent);
+
+    // Highlight the message being edited
+    msgEl.classList.add('ring-1', 'ring-blue-500/50', 'rounded-lg', 'bg-blue-500/5');
+}
+
+function cancelEdit() {
+    if (!editingMessageId) return;
+
+    // Remove highlight
+    const msgEl = document.querySelector('[data-message-id="' + editingMessageId + '"]');
+    if (msgEl) {
+        msgEl.classList.remove('ring-1', 'ring-blue-500/50', 'rounded-lg', 'bg-blue-500/5');
     }
+
+    editingMessageId = null;
+    const input = document.getElementById('message-input');
+    if (input) input.value = '';
+
+    hideEditIndicator();
+}
+
+function showEditIndicator(msgId, content) {
+    hideEditIndicator();
+    const composer = document.getElementById('message-composer-controls');
+    if (!composer) return;
+
+    const indicator = document.createElement('div');
+    indicator.id = 'edit-indicator';
+    indicator.className = 'flex items-center gap-2 px-4 py-2 bg-blue-900/30 border border-blue-700/50 rounded-xl mb-2 text-sm';
+    indicator.innerHTML = `
+        <i class="fa-solid fa-pencil text-blue-400 text-xs"></i>
+        <span class="text-blue-300 flex-1 truncate">Editing message</span>
+        <button type="button" onclick="cancelEdit()" class="text-zinc-400 hover:text-zinc-200 ml-2" title="Cancel edit">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
+    `;
+    composer.parentNode.insertBefore(indicator, composer);
+}
+
+function hideEditIndicator() {
+    const existing = document.getElementById('edit-indicator');
+    if (existing) existing.remove();
 }
 
 async function deleteMessage(msgId) {

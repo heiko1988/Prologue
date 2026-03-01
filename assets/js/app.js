@@ -598,6 +598,24 @@ async function init() {
                 return;
             }
 
+            // Check if we're in edit mode
+            if (typeof editingMessageId !== 'undefined' && editingMessageId) {
+                const editResult = await postForm('/api/messages/edit', {
+                    csrf_token: getCsrfToken(),
+                    message_id: String(editingMessageId),
+                    content
+                });
+                if (editResult.success) {
+                    input.value = '';
+                    cancelEdit();
+                    showToast('Message edited', 'success');
+                    await pollMessages({ scrollMode: 'preserve' });
+                } else {
+                    showToast(editResult.error || 'Failed to edit message', 'error');
+                }
+                return;
+            }
+
             const result = await postForm('/api/messages', {
                 csrf_token: getCsrfToken(),
                 chat_id: String(currentChat.id),
@@ -624,6 +642,12 @@ async function init() {
 
     const messageInput = document.getElementById('message-input');
     if (messageInput) {
+        messageInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && typeof editingMessageId !== 'undefined' && editingMessageId) {
+                e.preventDefault();
+                cancelEdit();
+            }
+        });
         messageInput.addEventListener('input', handleMessageInputTyping);
         messageInput.addEventListener('blur', () => {
             if (!typingActive) return;
